@@ -1,7 +1,26 @@
 #include <yxis.h>
+#include <iostream>
 
-int main(int argc, char** argv)
+class SandboxApplication : public Yxis::Application
 {
-   initialize_yxis();
-   return 0;
+public:
+   SandboxApplication()
+   {
+
+   }
+
+   ~SandboxApplication()
+   {
+
+   }
+
+   void run() override
+   {
+      std::cout << "Dziwki, Dragi, Lasery\n";
+   }
+};
+
+Yxis::Application* CreateApplication()
+{
+   return new SandboxApplication();
 }
