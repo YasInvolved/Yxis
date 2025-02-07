@@ -7,10 +7,12 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIGURATION>")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/$<CONFIGURATION>")
 
+add_subdirectory(3rdparty/Vulkan-Headers)
 if(WIN32)
    set(VOLK_STATIC_DEFINES "VK_USE_PLATFORM_WIN32_KHR")
 endif()
 add_subdirectory(3rdparty/volk)
+target_link_libraries(volk PUBLIC Vulkan-Headers)
 
 # we dont need those
 set(SDL_RENDER OFF)
