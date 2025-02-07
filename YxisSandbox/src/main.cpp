@@ -6,17 +6,12 @@ class SandboxApplication : public Yxis::Application
 public:
    SandboxApplication()
    {
-
+      // do some code on initialization
    }
 
    ~SandboxApplication()
    {
-
-   }
-
-   void run() override
-   {
-      std::cout << "Dziwki, Dragi, Lasery\n";
+      // do some code on exit
    }
 };
 

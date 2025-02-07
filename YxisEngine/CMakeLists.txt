@@ -6,3 +6,4 @@ endif()
 
 target_compile_definitions(YxisEngine PRIVATE $<$<CONFIG:Debug>:YX_DEBUG>)
 target_include_directories(YxisEngine PUBLIC "include")
+target_link_libraries(YxisEngine PRIVATE SDL3::SDL3 volk::volk)

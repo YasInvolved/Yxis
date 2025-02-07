@@ -10,7 +10,9 @@ namespace Yxis
       Application();
       virtual ~Application();
 
-      virtual void run();
+      void run();
+   private:
+      bool m_running = false;
    };
 }
 
