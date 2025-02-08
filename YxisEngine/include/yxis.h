@@ -1,5 +1,6 @@
 #pragma once
 
-#include "definitions.h"
-#include "Application.h"
-#include "EntryPoint.h"
+#include <Yxis/definitions.h>
+#include <Yxis/Logger.h>
+#include <Yxis/Application.h>
+#include <Yxis/EntryPoint.h>

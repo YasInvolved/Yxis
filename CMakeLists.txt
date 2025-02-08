@@ -24,5 +24,7 @@ set(SDL_RENDER_METAL OFF)
 set(SDL_RENDER_VULKAN OFF)
 add_subdirectory(3rdparty/SDL)
 
+add_subdirectory(3rdparty/spdlog)
+
 add_subdirectory(YxisEngine)
 add_subdirectory(YxisSandbox)
