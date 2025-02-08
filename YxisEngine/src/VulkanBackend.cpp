@@ -21,12 +21,12 @@ namespace Yxis::Vulkan
       m_extensions = requiredExtensions;
    }
 
-   const HasExtensionsAndLayers::list_t& HasExtensionsAndLayers::getEnabledLayers() const noexcept
+   HasExtensionsAndLayers::list_t& HasExtensionsAndLayers::getEnabledLayers() noexcept
    {
       return m_layers;
    }
 
-   const HasExtensionsAndLayers::list_t& HasExtensionsAndLayers::getEnabledExtensions() const noexcept
+   HasExtensionsAndLayers::list_t& HasExtensionsAndLayers::getEnabledExtensions() noexcept
    {
       return m_extensions;
    }
@@ -107,8 +107,48 @@ namespace Yxis::Vulkan
 
    void Instance::initialize()
    {
-      const auto& enabledLayers = getEnabledLayers();
-      const auto& enabledExtensions = getEnabledExtensions();
+      auto& enabledLayers = getEnabledLayers();
+      auto& enabledExtensions = getEnabledExtensions();
+
+      uint32_t availableLayersCount;
+      vkEnumerateInstanceLayerProperties(&availableLayersCount, nullptr);
+      std::vector<VkLayerProperties> availableLayers(availableLayersCount);
+      vkEnumerateInstanceLayerProperties(&availableLayersCount, availableLayers.data());
+
+      uint32_t availableExtensionCount;
+      vkEnumerateInstanceExtensionProperties(nullptr, &availableExtensionCount, nullptr);
+      std::vector<VkExtensionProperties> availableExtensions(availableExtensionCount);
+      vkEnumerateInstanceExtensionProperties(nullptr, &availableExtensionCount, availableExtensions.data());
+
+      for (uint32_t i = 0; i < enabledLayers.size(); i++)
+      {
+         bool found = false;
+         for (const auto& availableLayer : availableLayers)
+         {
+            if (std::strcmp(availableLayer.layerName, enabledLayers[i]) == 0) found = true;
+         }
+
+         if (not found)
+         {
+            YX_CORE_LOGGER->warn("Disabling unavailable layer {}", enabledLayers[i]);
+            enabledLayers.erase(enabledLayers.begin() + i);
+         }
+      }
+
+      for (uint32_t i = 0; i < enabledExtensions.size(); i++)
+      {
+         bool found = false;
+         for (const auto& availableExtension : availableExtensions)
+         {
+            if (std::strcmp(availableExtension.extensionName, enabledExtensions[i]) == 0) found = true;
+         }
+
+         if (not found)
+         {
+            YX_CORE_LOGGER->warn("Disabling unavailable extension {}", enabledExtensions[i]);
+            enabledExtensions.erase(enabledExtensions.begin() + i);
+         }
+      }
 
       const VkApplicationInfo appInfo =
       {

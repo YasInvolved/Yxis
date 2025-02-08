@@ -22,8 +22,8 @@ namespace Yxis::Vulkan
       void addExtensions(const list_t& names);
       void addExtensions(const char** names, const size_t size);
 
-      const list_t& getEnabledLayers() const noexcept;
-      const list_t& getEnabledExtensions() const noexcept;
+      list_t& getEnabledLayers() noexcept;
+      list_t& getEnabledExtensions() noexcept;
 
       virtual void initialize() = 0;
    private:
