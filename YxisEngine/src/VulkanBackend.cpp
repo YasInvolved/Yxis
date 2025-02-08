@@ -35,6 +35,8 @@ namespace Yxis::Vulkan
       {
          throw std::runtime_error(fmt::format("Failed to create Vulkan instance. {}", string_VkResult(res)));
       }
+
+      volkLoadInstance(m_handle);
    }
 
    Instance::~Instance()
