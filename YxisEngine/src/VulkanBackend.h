@@ -36,19 +36,40 @@ namespace Yxis::Vulkan
       uint32_t patch;
    };
 
+   class Device : public HasExtensionsAndLayers
+   {
+   public:
+      Device(VkPhysicalDevice physicalHandle);
+      ~Device();
+
+      void initialize();
+      const VkPhysicalDeviceMemoryProperties& getMemoryProperties() const noexcept;
+      const VkPhysicalDeviceProperties& getDeviceProperties() const noexcept;
+      const VkPhysicalDeviceFeatures& getAvailableDeviceFeatures() const noexcept;
+      VkPhysicalDeviceFeatures& getEnabledDeviceFeatures() noexcept;
+   private:
+      VkDevice m_handle = VK_NULL_HANDLE;
+      VkPhysicalDevice m_physicalHandle;
+      VkPhysicalDeviceMemoryProperties m_memoryProperties;
+      VkPhysicalDeviceProperties m_deviceProperties;
+      VkPhysicalDeviceFeatures m_deviceAvailableFeatures;
+      VkPhysicalDeviceFeatures m_deviceEnabledFeatures;
+   };
+
    class Instance : public HasExtensionsAndLayers
    {
    public:
+      using devicelist_t = std::vector<Device>;
+
       Instance(const std::string_view applicationName, const AppVersion version);
       ~Instance();
+
+      devicelist_t getDevices() const;
+      Device getBestDevice() const;
    private:
       const std::string_view m_applicationName;
       const AppVersion m_applicationVersion;
       VkInstance m_handle = VK_NULL_HANDLE;
       VkDebugUtilsMessengerEXT m_debugMessengerHandle = VK_NULL_HANDLE;
-   };
-
-   class Device : public HasExtensionsAndLayers
-   {
    };
 }

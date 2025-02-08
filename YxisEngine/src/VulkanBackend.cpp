@@ -151,8 +151,108 @@ namespace Yxis::Vulkan
       #endif
    }
 
+   Instance::devicelist_t Instance::getDevices() const
+   {
+      assert(m_handle != VK_NULL_HANDLE && "Vulkan::Instance m_handle is null");
+
+      uint32_t devicesCount;
+      vkEnumeratePhysicalDevices(m_handle, &devicesCount, nullptr);
+      VkPhysicalDevice* rawDevices = new VkPhysicalDevice[devicesCount];
+      vkEnumeratePhysicalDevices(m_handle, &devicesCount, rawDevices);
+
+      std::vector<Device> devices;
+      for (uint32_t i = 0; i < devicesCount; i++)
+      {
+         devices.emplace_back(rawDevices[i]);
+      }
+
+      delete[] rawDevices;
+      return devices;
+   }
+
+   Device Instance::getBestDevice() const
+   {
+      auto devices = getDevices();
+      if (devices.size() == 1)
+         return devices[0];
+
+      uint32_t bestRating = 0;
+      size_t bestDeviceIndex = 0;
+      for (size_t i = 0; i < devices.size(); i++)
+      {
+         const auto& device = devices[i];
+         uint32_t rating = 0;
+
+         const auto& properties = device.getDeviceProperties();
+         const auto& features = device.getAvailableDeviceFeatures();
+
+         switch (properties.deviceType)
+         {
+         case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU:
+         case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU:
+            rating += 100;
+            break;
+         case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU:
+            rating += 80;
+         }
+
+         if (features.tessellationShader)
+            rating += 50;
+         if (features.geometryShader)
+            rating += 50;
+         
+         if (rating > bestRating)
+         {
+            bestRating = rating;
+            bestDeviceIndex = i;
+         }
+      }
+
+      return devices[bestDeviceIndex];
+   }
+
    Instance::~Instance()
    {
       vkDestroyInstance(m_handle, nullptr);
+   }
+
+   Device::Device(VkPhysicalDevice physicalHandle)
+      : m_physicalHandle(physicalHandle), HasExtensionsAndLayers()
+   {
+      vkGetPhysicalDeviceFeatures(m_physicalHandle, &m_deviceAvailableFeatures);
+      vkGetPhysicalDeviceProperties(m_physicalHandle, &m_deviceProperties);
+      vkGetPhysicalDeviceMemoryProperties(m_physicalHandle, &m_memoryProperties);
+      m_deviceEnabledFeatures = m_deviceAvailableFeatures; // enable all available features by default
+   }
+
+   void Device::initialize()
+   {
+
+   }
+
+   const VkPhysicalDeviceMemoryProperties& Device::getMemoryProperties() const noexcept
+   {
+      return m_memoryProperties;
+   }
+
+   const VkPhysicalDeviceProperties& Device::getDeviceProperties() const noexcept
+   {
+      return m_deviceProperties;
+   }
+
+   const VkPhysicalDeviceFeatures& Device::getAvailableDeviceFeatures() const noexcept
+   {
+      return m_deviceAvailableFeatures;
+   }
+
+   VkPhysicalDeviceFeatures& Device::getEnabledDeviceFeatures() noexcept
+   {
+      return m_deviceEnabledFeatures;
+   }
+
+   Device::~Device()
+   {
+      if (m_handle != VK_NULL_HANDLE)
+         vkDestroyDevice(m_handle, nullptr);
    }
 }
