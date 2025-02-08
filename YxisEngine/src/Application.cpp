@@ -4,7 +4,7 @@
 #include <volk.h>
 #include <vector>
 #include <algorithm>
-
+#include "VulkanBackend.h"
 
 struct WindowDestructor {
    void operator()(SDL_Window* ptr) const
@@ -17,7 +17,7 @@ static std::unique_ptr<SDL_Window, WindowDestructor> s_windowHandle;
 
 namespace Yxis
 {
-   Application::Application()
+   Application::Application() noexcept
    {
       volkInitialize();
       SDL_Init(SDL_INIT_VIDEO);
@@ -28,6 +28,9 @@ namespace Yxis
       for (int32_t i = 0; i < displaysCount; i++)
       {
          const auto* dm = SDL_GetCurrentDisplayMode(displays[i]);
+         YX_CORE_LOGGER->info("Display found: {}", SDL_GetDisplayName(displays[i]), dm->w, dm->h, dm->refresh_rate);
+         YX_CORE_LOGGER->info("Resolution: {}x{}", dm->w, dm->h);
+         YX_CORE_LOGGER->info("Refresh Rate: {}hz", dm->refresh_rate);
          displayModes.emplace_back(std::move(dm));
       }
 
@@ -50,6 +53,9 @@ namespace Yxis
       // prevent double invoke
       if (m_running) return;
       else m_running = true;
+
+      // initialize vulkan here because it may throw an error
+      Vulkan::Instance instance("Sigma", { 1, 0, 0 });
 
       while (m_running)
       {

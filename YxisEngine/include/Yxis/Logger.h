@@ -21,3 +21,6 @@ namespace Yxis
       static logger_t m_clientLogger;
    };
 }
+
+#define YX_CORE_LOGGER     ::Yxis::Logger::getCoreLogger()
+#define YX_CLIENT_LOGGER   ::Yxis::Logger::getClientLogger()

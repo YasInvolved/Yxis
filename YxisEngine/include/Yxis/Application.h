@@ -7,7 +7,7 @@ namespace Yxis
    class YX_API Application
    {
    public:
-      Application();
+      Application() noexcept;
       virtual ~Application();
 
       void run();
