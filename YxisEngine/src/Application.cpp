@@ -56,7 +56,10 @@ namespace Yxis
 
       // initialize vulkan here because it may throw an error
       Vulkan::Instance instance("Sigma", { 1, 0, 0 });
+      // ANY NEEDED EXTENSIONS GO HERE
+      instance.initialize();
       Vulkan::Device device = instance.getBestDevice();
+      // SAME HERE
       device.initialize();
 
       while (m_running)

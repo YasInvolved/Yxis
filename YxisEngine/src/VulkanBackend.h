@@ -24,6 +24,8 @@ namespace Yxis::Vulkan
 
       const list_t& getEnabledLayers() const noexcept;
       const list_t& getEnabledExtensions() const noexcept;
+
+      virtual void initialize() = 0;
    private:
       list_t m_extensions;
       list_t m_layers;
@@ -42,7 +44,7 @@ namespace Yxis::Vulkan
       Device(VkPhysicalDevice physicalHandle);
       ~Device();
 
-      void initialize();
+      void initialize() override;
       const VkPhysicalDeviceMemoryProperties& getMemoryProperties() const noexcept;
       const VkPhysicalDeviceProperties& getDeviceProperties() const noexcept;
       const VkPhysicalDeviceFeatures& getAvailableDeviceFeatures() const noexcept;
@@ -63,6 +65,8 @@ namespace Yxis::Vulkan
 
       Instance(const std::string_view applicationName, const AppVersion version);
       ~Instance();
+
+      void initialize() override;
 
       devicelist_t getDevices() const;
       Device getBestDevice() const;

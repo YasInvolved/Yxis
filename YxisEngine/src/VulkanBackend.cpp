@@ -100,12 +100,15 @@ namespace Yxis::Vulkan
    Instance::Instance(const std::string_view applicationName, const AppVersion version)
       : m_applicationName(applicationName), m_applicationVersion(version), HasExtensionsAndLayers(YX_DEBUG_LAYERS, YX_DEBUG_EXTENSIONS)
    {
-      const auto& enabledLayers = getEnabledLayers();
-      const auto& enabledExtensions = getEnabledExtensions();
-
       uint32_t surfaceExtensionCount;
       SDL_Vulkan_GetInstanceExtensions(&surfaceExtensionCount);
       addExtensions(const_cast<const char**>(SDL_Vulkan_GetInstanceExtensions(&surfaceExtensionCount)), surfaceExtensionCount); // necessary pain we need to take, we dont modify data inside
+   }
+
+   void Instance::initialize()
+   {
+      const auto& enabledLayers = getEnabledLayers();
+      const auto& enabledExtensions = getEnabledExtensions();
 
       const VkApplicationInfo appInfo =
       {
@@ -142,13 +145,13 @@ namespace Yxis::Vulkan
 
       volkLoadInstance(m_handle);
 
-      #ifdef YX_DEBUG
+#ifdef YX_DEBUG
       res = vkCreateDebugUtilsMessengerEXT(m_handle, &debugMessengerCreateInfo, nullptr, &m_debugMessengerHandle);
       if (res != VK_SUCCESS)
       {
          throw std::runtime_error(fmt::format("Failed to create Vulkan debug utils messenger. {}", string_VkResult(res)));
       }
-      #endif
+#endif
    }
 
    Instance::devicelist_t Instance::getDevices() const
