@@ -130,7 +130,7 @@ namespace Yxis::Vulkan
 
          if (not found)
          {
-            YX_CORE_LOGGER->warn("Disabling unavailable layer {}", enabledLayers[i]);
+            YX_CORE_LOGGER->warn("Disabling unavailable instance layer {}", enabledLayers[i]);
             enabledLayers.erase(enabledLayers.begin() + i);
          }
       }
@@ -145,7 +145,7 @@ namespace Yxis::Vulkan
 
          if (not found)
          {
-            YX_CORE_LOGGER->warn("Disabling unavailable extension {}", enabledExtensions[i]);
+            YX_CORE_LOGGER->warn("Disabling unavailable instance extension {}", enabledExtensions[i]);
             enabledExtensions.erase(enabledExtensions.begin() + i);
          }
       }
@@ -189,7 +189,8 @@ namespace Yxis::Vulkan
       res = vkCreateDebugUtilsMessengerEXT(m_handle, &debugMessengerCreateInfo, nullptr, &m_debugMessengerHandle);
       if (res != VK_SUCCESS)
       {
-         throw std::runtime_error(fmt::format("Failed to create Vulkan debug utils messenger. {}", string_VkResult(res)));
+         // debug messenger is optional we can continue without it
+         YX_CORE_LOGGER->error("Vulkan Debug Messenger is not available. Vulkan message: {}", string_VkResult(res));
       }
 #endif
    }
@@ -266,11 +267,54 @@ namespace Yxis::Vulkan
       vkGetPhysicalDeviceProperties(m_physicalHandle, &m_deviceProperties);
       vkGetPhysicalDeviceMemoryProperties(m_physicalHandle, &m_memoryProperties);
       m_deviceEnabledFeatures = m_deviceAvailableFeatures; // enable all available features by default
+
+      addExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
    }
 
    void Device::initialize()
    {
+      auto& enabledLayers = getEnabledLayers();
+      auto& enabledExtensions = getEnabledExtensions();
 
+      uint32_t availableLayersCount;
+      vkEnumerateDeviceLayerProperties(m_physicalHandle, &availableLayersCount, nullptr);
+      std::vector<VkLayerProperties> availableLayers(availableLayersCount);
+      vkEnumerateDeviceLayerProperties(m_physicalHandle, &availableLayersCount, availableLayers.data());
+
+      uint32_t availableExtensionsCount;
+      vkEnumerateDeviceExtensionProperties(m_physicalHandle, nullptr, &availableExtensionsCount, nullptr);
+      std::vector<VkExtensionProperties> availableExtensions(availableExtensionsCount);
+      vkEnumerateDeviceExtensionProperties(m_physicalHandle, nullptr, &availableExtensionsCount, availableExtensions.data());
+
+      for (uint32_t i = 0; i < enabledLayers.size(); i++)
+      {
+         bool found = false;
+         for (const auto& availableLayer : availableLayers)
+         {
+            if (std::strcmp(availableLayer.layerName, enabledLayers[i]) == 0) found = true;
+         }
+
+         if (not found)
+         {
+            YX_CORE_LOGGER->warn("Disabling unavailable device layer {}", enabledLayers[i]);
+            enabledLayers.erase(enabledLayers.begin() + i);
+         }
+      }
+
+      for (uint32_t i = 0; i < enabledExtensions.size(); i++)
+      {
+         bool found = false;
+         for (const auto& availableExtension : availableExtensions)
+         {
+            if (std::strcmp(availableExtension.extensionName, enabledExtensions[i]) == 0) found = true;
+         }
+
+         if (not found)
+         {
+            YX_CORE_LOGGER->warn("Disabling unavailable device extension {}", enabledExtensions[i]);
+            enabledExtensions.erase(enabledExtensions.begin() + i);
+         }
+      }
    }
 
    const VkPhysicalDeviceMemoryProperties& Device::getMemoryProperties() const noexcept
