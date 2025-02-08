@@ -1,7 +1,7 @@
 #include "VulkanBackend.h"
 #include <stdexcept>
-#include <vulkan/vk_enum_string_helper.h>
 #include <spdlog/fmt/fmt.h>
+#include "vk_enum_string_helper.h"
 
 namespace Yxis::Vulkan
 {
