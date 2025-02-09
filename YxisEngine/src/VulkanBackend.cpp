@@ -300,6 +300,19 @@ namespace Yxis::Vulkan
             m_queueFamilies.sparseBindingQueueIndex = i;*/
       }
 
+      {
+         uint32_t presentModesCount;
+         vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalHandle, surface, &presentModesCount, nullptr);
+         m_availablePresentModes.resize(presentModesCount);
+         vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalHandle, surface, &presentModesCount, m_availablePresentModes.data());
+      }
+
+      VkResult res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physicalHandle, surface, &m_deviceSurfaceCapabilities);
+      if (res != VK_SUCCESS)
+      {
+         throw std::runtime_error(fmt::format("Failed to fetch surface capabilities. {}", string_VkResult(res)));
+      }
+
       addExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
    }
 

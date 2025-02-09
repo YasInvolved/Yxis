@@ -71,6 +71,8 @@ namespace Yxis::Vulkan
       VkPhysicalDeviceProperties m_deviceProperties;
       VkPhysicalDeviceFeatures m_deviceAvailableFeatures;
       VkPhysicalDeviceFeatures m_deviceEnabledFeatures;
+      std::vector<VkPresentModeKHR> m_availablePresentModes;
+      VkSurfaceCapabilitiesKHR m_deviceSurfaceCapabilities;
       QueueFamilies m_queueFamilies;
       std::array<VkQueue, GFX_QUEUES_COUNT> m_graphicsQueues = {};
       std::array<VkQueue, COMPUTE_QUEUES_COUNT> m_computeQueues = {};

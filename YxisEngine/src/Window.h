@@ -16,8 +16,6 @@ namespace Yxis
    };
 
    using window_t = std::unique_ptr<SDL_Window, WindowDestructor>;
-   static window_t s_windowHandle = nullptr;
-   static VkSurfaceKHR s_surfaceHandle = nullptr;
    static bool s_windowInitialized = false;
 
    window_t& getWindow();

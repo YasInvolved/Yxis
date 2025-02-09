@@ -6,6 +6,9 @@
 
 namespace Yxis
 {
+   static window_t s_windowHandle = nullptr;
+   static VkSurfaceKHR s_surfaceHandle = nullptr;
+
    window_t& getWindow()
    {
       assert(s_windowHandle != nullptr && "windowHandle is null");
