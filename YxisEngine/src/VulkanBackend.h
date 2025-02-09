@@ -3,6 +3,7 @@
 #include <volk.h>
 #include <string>
 #include <vector>
+#include <array>
 #include <optional>
 
 namespace Yxis::Vulkan 
@@ -47,6 +48,11 @@ namespace Yxis::Vulkan
       std::optional<uint32_t> sparseBindingQueueIndex;
    };
 
+   static constexpr uint32_t GFX_QUEUES_COUNT = 1;
+   static constexpr uint32_t COMPUTE_QUEUES_COUNT = 1;
+   static constexpr uint32_t TRANSFER_QUEUES_COUNT = 1;
+   static constexpr uint32_t SPARSE_QUEUES_COUNT = 1;
+
    class Device : public HasExtensionsAndLayers
    {
    public:
@@ -66,6 +72,10 @@ namespace Yxis::Vulkan
       VkPhysicalDeviceFeatures m_deviceAvailableFeatures;
       VkPhysicalDeviceFeatures m_deviceEnabledFeatures;
       QueueFamilies m_queueFamilies;
+      std::array<VkQueue, GFX_QUEUES_COUNT> m_graphicsQueues;
+      std::array<VkQueue, COMPUTE_QUEUES_COUNT> m_computeQueues;
+      std::array<VkQueue, TRANSFER_QUEUES_COUNT> m_transferQueues;
+      std::array<VkQueue, SPARSE_QUEUES_COUNT> m_sparseQueues;
    };
 
    class Instance : public HasExtensionsAndLayers

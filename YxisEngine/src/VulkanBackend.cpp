@@ -280,12 +280,12 @@ namespace Yxis::Vulkan
          const auto& queueFamily = queueFamilies[i];
          if (queueFamily.queueCount > 0 && (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT))
             m_queueFamilies.gfxQueueIndex = i;
-         if (queueFamily.queueCount > 0 && (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT))
-            m_queueFamilies.computeQueueIndex = i;
+         /*if (queueFamily.queueCount > 0 && (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT))
+            m_queueFamilies.computeQueueIndex = i;*/
          if (queueFamily.queueCount > 0 && (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT))
             m_queueFamilies.transferQueueIndex = i;
-         if (queueFamily.queueCount > 0 && (queueFamily.queueFlags & VK_QUEUE_SPARSE_BINDING_BIT))
-            m_queueFamilies.sparseBindingQueueIndex = i;
+         /*if (queueFamily.queueCount > 0 && (queueFamily.queueFlags & VK_QUEUE_SPARSE_BINDING_BIT))
+            m_queueFamilies.sparseBindingQueueIndex = i;*/
       }
 
       addExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
@@ -335,6 +335,82 @@ namespace Yxis::Vulkan
                YX_CORE_LOGGER->warn("Disabling unavailable device extension {}", enabledExtensions[i]);
                enabledExtensions.erase(enabledExtensions.begin() + i);
             }
+         }
+      }
+
+      {
+         constexpr float queuePriority = 1.0f;
+
+         const std::array<VkDeviceQueueCreateInfo, 2> queueCreateInfos =
+         {
+            {
+               { // gfx
+                  .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+                  .pNext = nullptr,
+                  .flags = 0,
+                  .queueFamilyIndex = m_queueFamilies.gfxQueueIndex,
+                  .queueCount = GFX_QUEUES_COUNT,
+                  .pQueuePriorities = &queuePriority,
+               },
+               { // transfer
+                  .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+                  .pNext = nullptr,
+                  .flags = 0,
+                  .queueFamilyIndex = m_queueFamilies.transferQueueIndex.value(),
+                  .queueCount = TRANSFER_QUEUES_COUNT,
+                  .pQueuePriorities = &queuePriority
+               }
+            }
+         };
+
+         const VkDeviceCreateInfo deviceCreateInfo =
+         {
+            .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+            .pNext = nullptr,
+            .flags = 0,
+            .queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size()),
+            .pQueueCreateInfos = queueCreateInfos.data(),
+            .enabledLayerCount = static_cast<uint32_t>(enabledLayers.size()),
+            .ppEnabledLayerNames = enabledLayers.data(),
+            .enabledExtensionCount = static_cast<uint32_t>(enabledExtensions.size()),
+            .ppEnabledExtensionNames = enabledExtensions.data()
+         };
+
+         VkResult res = vkCreateDevice(m_physicalHandle, &deviceCreateInfo, nullptr, &m_handle);
+         if (res != VK_SUCCESS)
+         {
+            throw std::runtime_error("Failed to create a Vulkan device");
+         }
+
+         volkLoadDevice(m_handle);
+      }
+
+      for (uint32_t i = 0; i < GFX_QUEUES_COUNT; i++)
+      {
+         vkGetDeviceQueue(m_handle, m_queueFamilies.gfxQueueIndex, i, m_graphicsQueues.data() + i);
+      }
+
+      if (m_queueFamilies.computeQueueIndex.has_value()) 
+      {
+         for (uint32_t i = 0; i < COMPUTE_QUEUES_COUNT; i++)
+         {
+            vkGetDeviceQueue(m_handle, m_queueFamilies.computeQueueIndex.value(), i, m_computeQueues.data() + i);
+         }
+      }
+
+      if (m_queueFamilies.transferQueueIndex.has_value())
+      {
+         for (uint32_t i = 0; i < TRANSFER_QUEUES_COUNT; i++)
+         {
+            vkGetDeviceQueue(m_handle, m_queueFamilies.transferQueueIndex.value(), i, m_transferQueues.data() + i);
+         }
+      }
+
+      if (m_queueFamilies.sparseBindingQueueIndex.has_value())
+      {
+         for (uint32_t i = 0; i < SPARSE_QUEUES_COUNT; i++)
+         {
+            vkGetDeviceQueue(m_handle, m_queueFamilies.sparseBindingQueueIndex.value(), i, m_sparseQueues.data() + i);
          }
       }
    }
