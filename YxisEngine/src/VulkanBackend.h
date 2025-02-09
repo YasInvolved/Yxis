@@ -3,6 +3,7 @@
 #include <volk.h>
 #include <string>
 #include <vector>
+#include <optional>
 
 namespace Yxis::Vulkan 
 {
@@ -38,6 +39,14 @@ namespace Yxis::Vulkan
       uint32_t patch;
    };
 
+   struct QueueFamilies
+   {
+      uint32_t gfxQueueIndex;
+      std::optional<uint32_t> computeQueueIndex;
+      std::optional<uint32_t> transferQueueIndex;
+      std::optional<uint32_t> sparseBindingQueueIndex;
+   };
+
    class Device : public HasExtensionsAndLayers
    {
    public:
@@ -56,6 +65,7 @@ namespace Yxis::Vulkan
       VkPhysicalDeviceProperties m_deviceProperties;
       VkPhysicalDeviceFeatures m_deviceAvailableFeatures;
       VkPhysicalDeviceFeatures m_deviceEnabledFeatures;
+      QueueFamilies m_queueFamilies;
    };
 
    class Instance : public HasExtensionsAndLayers
