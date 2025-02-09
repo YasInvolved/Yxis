@@ -4,6 +4,7 @@
 #include <SDL3/SDL_vulkan.h>
 #include "vk_enum_string_helper.h"
 #include <Yxis/Logger.h>
+#include "Window.h"
 
 #ifdef YX_DEBUG
 #define YX_DEBUG_LAYERS { "VK_LAYER_KHRONOS_validation" }
@@ -197,6 +198,11 @@ namespace Yxis::Vulkan
 #endif
    }
 
+   VkInstance Instance::getHandle() const
+   {
+      return m_handle;
+   }
+
    Instance::devicelist_t Instance::getDevices() const
    {
       assert(m_handle != VK_NULL_HANDLE && "Vulkan::Instance m_handle is null");
@@ -265,6 +271,7 @@ namespace Yxis::Vulkan
    Device::Device(VkPhysicalDevice physicalHandle)
       : m_physicalHandle(physicalHandle), HasExtensionsAndLayers()
    {
+      auto surface = getSurface();
       vkGetPhysicalDeviceFeatures(m_physicalHandle, &m_deviceAvailableFeatures);
       vkGetPhysicalDeviceProperties(m_physicalHandle, &m_deviceProperties);
       vkGetPhysicalDeviceMemoryProperties(m_physicalHandle, &m_memoryProperties);
@@ -279,7 +286,12 @@ namespace Yxis::Vulkan
       {
          const auto& queueFamily = queueFamilies[i];
          if (queueFamily.queueCount > 0 && (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT))
-            m_queueFamilies.gfxQueueIndex = i;
+         {
+            VkBool32 isSurfaceSupported;
+            vkGetPhysicalDeviceSurfaceSupportKHR(m_physicalHandle, i, surface, &isSurfaceSupported);
+            if (isSurfaceSupported)
+               m_queueFamilies.gfxQueueIndex = i;
+         }
          /*if (queueFamily.queueCount > 0 && (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT))
             m_queueFamilies.computeQueueIndex = i;*/
          if (queueFamily.queueCount > 0 && (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT))

@@ -72,10 +72,10 @@ namespace Yxis::Vulkan
       VkPhysicalDeviceFeatures m_deviceAvailableFeatures;
       VkPhysicalDeviceFeatures m_deviceEnabledFeatures;
       QueueFamilies m_queueFamilies;
-      std::array<VkQueue, GFX_QUEUES_COUNT> m_graphicsQueues;
-      std::array<VkQueue, COMPUTE_QUEUES_COUNT> m_computeQueues;
-      std::array<VkQueue, TRANSFER_QUEUES_COUNT> m_transferQueues;
-      std::array<VkQueue, SPARSE_QUEUES_COUNT> m_sparseQueues;
+      std::array<VkQueue, GFX_QUEUES_COUNT> m_graphicsQueues = {};
+      std::array<VkQueue, COMPUTE_QUEUES_COUNT> m_computeQueues = {};
+      std::array<VkQueue, TRANSFER_QUEUES_COUNT> m_transferQueues = {};
+      std::array<VkQueue, SPARSE_QUEUES_COUNT> m_sparseQueues = {};
    };
 
    class Instance : public HasExtensionsAndLayers
@@ -88,12 +88,14 @@ namespace Yxis::Vulkan
 
       void initialize() override;
 
+      VkInstance getHandle() const;
       devicelist_t getDevices() const;
       Device getBestDevice() const;
    private:
       const std::string_view m_applicationName;
       const AppVersion m_applicationVersion;
       VkInstance m_handle = VK_NULL_HANDLE;
+      VkSurfaceKHR m_surface = VK_NULL_HANDLE;
       VkDebugUtilsMessengerEXT m_debugMessengerHandle = VK_NULL_HANDLE;
    };
 }

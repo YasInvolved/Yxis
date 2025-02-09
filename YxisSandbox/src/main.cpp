@@ -4,7 +4,7 @@
 class SandboxApplication : public Yxis::Application
 {
 public:
-   SandboxApplication()
+   SandboxApplication() : Application("SandboxApplication")
    {
       // do some code on initialization
    }
