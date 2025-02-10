@@ -511,6 +511,8 @@ namespace Yxis::Vulkan
          imageCount = std::clamp<uint32_t>(imageCount, surfaceCapabilities.minImageCount, surfaceCapabilities.maxImageCount);
       }
 
+      m_swapchainImages.resize(imageCount);
+
       auto chooseFormat = [](const Window::surfaceformats_t& formats) -> const VkSurfaceFormatKHR& {
          for (const auto& format : formats)
          {
@@ -562,10 +564,17 @@ namespace Yxis::Vulkan
       {
          throw std::runtime_error(fmt::format("Failed to create swapchain. {}", string_VkResult(res)));
       }
+
+      res = vkGetSwapchainImagesKHR(m_device.getHandle(), m_handle, &imageCount, m_swapchainImages.data());
+      if (res != VK_SUCCESS)
+      {
+         throw std::runtime_error(fmt::format("Failed to acquire swapchain images. {}", string_VkResult(res)));
+      }
    }
 
    Swapchain::~Swapchain()
    {
-
+      if (m_handle != VK_NULL_HANDLE)
+         vkDestroySwapchainKHR(m_device.getHandle(), m_handle, nullptr);
    }
 }
