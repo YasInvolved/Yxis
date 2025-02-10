@@ -5,10 +5,11 @@
 #include "vk_enum_string_helper.h"
 #include <Yxis/Logger.h>
 #include "Window.h"
+#include <algorithm>
 
 #ifdef YX_DEBUG
 #define YX_DEBUG_LAYERS { "VK_LAYER_KHRONOS_validation" }
-#define YX_DEBUG_EXTENSIONS { "VK_EXT_debug_utils", "VK_EXT_layer_settings" }
+#define YX_DEBUG_EXTENSIONS { "VK_EXT_debug_utils" }
 #else
 #define YX_DEBUG_LAYERS {}
 #define YX_DEBUG_EXTENSIONS {}
@@ -93,7 +94,7 @@ namespace Yxis::Vulkan
       .pNext = nullptr,
       .flags = 0,
       .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT,
-      .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+      .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
       .pfnUserCallback = debugMessengerCallback,
       .pUserData = nullptr
    };
@@ -271,7 +272,7 @@ namespace Yxis::Vulkan
    Device::Device(VkPhysicalDevice physicalHandle)
       : m_physicalHandle(physicalHandle), HasExtensionsAndLayers()
    {
-      auto surface = getSurface();
+      auto surface = Window::getSurface();
       vkGetPhysicalDeviceFeatures(m_physicalHandle, &m_deviceAvailableFeatures);
       vkGetPhysicalDeviceProperties(m_physicalHandle, &m_deviceProperties);
       vkGetPhysicalDeviceMemoryProperties(m_physicalHandle, &m_memoryProperties);
@@ -292,12 +293,12 @@ namespace Yxis::Vulkan
             if (isSurfaceSupported)
                m_queueFamilies.gfxQueueIndex = i;
          }
-         /*if (queueFamily.queueCount > 0 && (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT))
-            m_queueFamilies.computeQueueIndex = i;*/
+         if (queueFamily.queueCount > 0 && (queueFamily.queueFlags & VK_QUEUE_COMPUTE_BIT))
+            m_queueFamilies.computeQueueIndex = i;
          if (queueFamily.queueCount > 0 && (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT))
             m_queueFamilies.transferQueueIndex = i;
-         /*if (queueFamily.queueCount > 0 && (queueFamily.queueFlags & VK_QUEUE_SPARSE_BINDING_BIT))
-            m_queueFamilies.sparseBindingQueueIndex = i;*/
+         //if (queueFamily.queueCount > 0 && (queueFamily.queueFlags & VK_QUEUE_SPARSE_BINDING_BIT))
+         //   m_queueFamilies.sparseBindingQueueIndex = i;
       }
 
       {
@@ -305,12 +306,6 @@ namespace Yxis::Vulkan
          vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalHandle, surface, &presentModesCount, nullptr);
          m_availablePresentModes.resize(presentModesCount);
          vkGetPhysicalDeviceSurfacePresentModesKHR(m_physicalHandle, surface, &presentModesCount, m_availablePresentModes.data());
-      }
-
-      VkResult res = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physicalHandle, surface, &m_deviceSurfaceCapabilities);
-      if (res != VK_SUCCESS)
-      {
-         throw std::runtime_error(fmt::format("Failed to fetch surface capabilities. {}", string_VkResult(res)));
       }
 
       addExtension(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
@@ -366,7 +361,7 @@ namespace Yxis::Vulkan
       {
          constexpr float queuePriority = 1.0f;
 
-         const std::array<VkDeviceQueueCreateInfo, 2> queueCreateInfos =
+         const std::array<VkDeviceQueueCreateInfo, 3> queueCreateInfos =
          {
             {
                { // gfx
@@ -377,6 +372,14 @@ namespace Yxis::Vulkan
                   .queueCount = GFX_QUEUES_COUNT,
                   .pQueuePriorities = &queuePriority,
                },
+               { // compute
+                  .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+                  .pNext = nullptr,
+                  .flags = 0,
+                  .queueFamilyIndex = m_queueFamilies.computeQueueIndex.value(),
+                  .queueCount = COMPUTE_QUEUES_COUNT,
+                  .pQueuePriorities = &queuePriority,
+               },
                { // transfer
                   .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
                   .pNext = nullptr,
@@ -384,7 +387,15 @@ namespace Yxis::Vulkan
                   .queueFamilyIndex = m_queueFamilies.transferQueueIndex.value(),
                   .queueCount = TRANSFER_QUEUES_COUNT,
                   .pQueuePriorities = &queuePriority
-               }
+               },
+               //{ // sparse binding
+               //   .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+               //   .pNext = nullptr,
+               //   .flags = 0,
+               //   .queueFamilyIndex = m_queueFamilies.sparseBindingQueueIndex.value(),
+               //   .queueCount = SPARSE_QUEUES_COUNT,
+               //   .pQueuePriorities = &queuePriority
+               //}
             }
          };
 
@@ -460,9 +471,101 @@ namespace Yxis::Vulkan
       return m_deviceEnabledFeatures;
    }
 
+   VkDevice Device::getHandle() const noexcept
+   {
+      return m_handle;
+   }
+
+   VkPhysicalDevice Device::getPhysicalHandle() const noexcept
+   {
+      return m_physicalHandle;
+   }
+
+   const QueueFamilies& Device::getQueueFamilies() const noexcept
+   {
+      return m_queueFamilies;
+   }
+
    Device::~Device()
    {
       if (m_handle != VK_NULL_HANDLE)
          vkDestroyDevice(m_handle, nullptr);
+   }
+
+   Swapchain::Swapchain(const Device& device)
+      : m_device(device)
+   {
+
+   }
+
+   void Swapchain::create()
+   {
+      const VkPhysicalDevice physicalDevice = m_device.getPhysicalHandle();
+      const VkSurfaceCapabilitiesKHR surfaceCapabilities = Window::getSurfaceCapabilities(physicalDevice);
+      const Window::surfaceformats_t surfaceFormats = Window::getAvailableSurfaceFormats(physicalDevice);
+      const Window::presentmodes_t presentModes = Window::getAvailableSurfacePresentModes(physicalDevice);
+
+      uint32_t imageCount = surfaceCapabilities.minImageCount + 1;
+      if (surfaceCapabilities.maxImageCount > imageCount)
+      {
+         imageCount = std::clamp<uint32_t>(imageCount, surfaceCapabilities.minImageCount, surfaceCapabilities.maxImageCount);
+      }
+
+      auto chooseFormat = [](const Window::surfaceformats_t& formats) -> const VkSurfaceFormatKHR& {
+         for (const auto& format : formats)
+         {
+            if (format.format == VK_FORMAT_R8G8B8A8_SRGB &&
+               format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+            {
+               return format;
+            }
+         }
+
+         return formats[0]; // return first position if desired format wasn't found
+      };
+
+      auto choosePresentMode = [](const Window::presentmodes_t& presentModes) -> const VkPresentModeKHR {
+         for (const auto& presentMode : presentModes)
+         {
+            if (presentMode == VK_PRESENT_MODE_MAILBOX_KHR) return presentMode;
+         }
+
+         return VK_PRESENT_MODE_FIFO_KHR; // FIFO is always supported
+      };
+
+      const auto& format = chooseFormat(surfaceFormats);
+
+      const VkSwapchainCreateInfoKHR createInfo =
+      {
+         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+         .pNext = nullptr,
+         .flags = 0,
+         .surface = Window::getSurface(),
+         .minImageCount = imageCount,
+         .imageFormat = format.format,
+         .imageColorSpace = format.colorSpace,
+         .imageExtent = surfaceCapabilities.currentExtent,
+         .imageArrayLayers = 1,
+         .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+         .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
+         .queueFamilyIndexCount = 1,
+         .pQueueFamilyIndices = &m_device.getQueueFamilies().gfxQueueIndex,
+         .preTransform = surfaceCapabilities.currentTransform,
+         .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+         .presentMode = choosePresentMode(presentModes),
+         .clipped = VK_FALSE,
+         .oldSwapchain = VK_NULL_HANDLE
+      };
+
+      VkResult res = vkCreateSwapchainKHR(m_device.getHandle(), &createInfo, nullptr, &m_handle);
+      if (res != VK_SUCCESS)
+      {
+         throw std::runtime_error(fmt::format("Failed to create swapchain. {}", string_VkResult(res)));
+      }
+   }
+
+   Swapchain::~Swapchain()
+   {
+
    }
 }

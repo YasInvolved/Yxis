@@ -64,6 +64,9 @@ namespace Yxis::Vulkan
       const VkPhysicalDeviceProperties& getDeviceProperties() const noexcept;
       const VkPhysicalDeviceFeatures& getAvailableDeviceFeatures() const noexcept;
       VkPhysicalDeviceFeatures& getEnabledDeviceFeatures() noexcept;
+      VkDevice getHandle() const noexcept;
+      VkPhysicalDevice getPhysicalHandle() const noexcept;
+      const QueueFamilies& getQueueFamilies() const noexcept;
    private:
       VkDevice m_handle = VK_NULL_HANDLE;
       VkPhysicalDevice m_physicalHandle;
@@ -72,7 +75,6 @@ namespace Yxis::Vulkan
       VkPhysicalDeviceFeatures m_deviceAvailableFeatures;
       VkPhysicalDeviceFeatures m_deviceEnabledFeatures;
       std::vector<VkPresentModeKHR> m_availablePresentModes;
-      VkSurfaceCapabilitiesKHR m_deviceSurfaceCapabilities;
       QueueFamilies m_queueFamilies;
       std::array<VkQueue, GFX_QUEUES_COUNT> m_graphicsQueues = {};
       std::array<VkQueue, COMPUTE_QUEUES_COUNT> m_computeQueues = {};
@@ -99,5 +101,19 @@ namespace Yxis::Vulkan
       VkInstance m_handle = VK_NULL_HANDLE;
       VkSurfaceKHR m_surface = VK_NULL_HANDLE;
       VkDebugUtilsMessengerEXT m_debugMessengerHandle = VK_NULL_HANDLE;
+   };
+
+   class Swapchain
+   {
+   public:
+      Swapchain(const Device& device);
+
+      void create();
+
+      ~Swapchain();
+   private:
+      const Device& m_device;
+      VkSwapchainKHR m_handle = VK_NULL_HANDLE;
+      std::vector<VkImage> m_swapchainImages;
    };
 }

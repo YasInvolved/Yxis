@@ -13,7 +13,7 @@ namespace Yxis
       : m_name(name)
    {
       volkInitialize();
-      initializeWindow(m_name);
+      Window::initialize(m_name);
    }
 
    Application::~Application()
@@ -30,10 +30,13 @@ namespace Yxis
       // initialize vulkan here because it may throw an error
       Vulkan::Instance instance(m_name, { 1, 0, 0 });
       instance.initialize();
-      createSurface(instance.getHandle());
+      Window::createSurface(instance.getHandle());
 
       Vulkan::Device device = instance.getBestDevice();
       device.initialize();
+
+      Vulkan::Swapchain swapchain(device);
+      swapchain.create();
 
       while (m_running)
       {
