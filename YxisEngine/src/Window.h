@@ -32,6 +32,7 @@ namespace Yxis
       static const surfaceformats_t getAvailableSurfaceFormats(VkPhysicalDevice physicalDevice);
       static const presentmodes_t getAvailableSurfacePresentModes(VkPhysicalDevice physicalDevice);
       static void createSurface(VkInstance instance);
+      static void destroySurface(VkInstance instance);
       static void initialize(const std::string_view title);
    private:
       static VkInstance s_instance;

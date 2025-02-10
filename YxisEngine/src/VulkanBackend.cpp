@@ -93,7 +93,7 @@ namespace Yxis::Vulkan
       .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
       .pNext = nullptr,
       .flags = 0,
-      .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT,
+      .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT,
       .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT,
       .pfnUserCallback = debugMessengerCallback,
       .pUserData = nullptr
@@ -266,6 +266,9 @@ namespace Yxis::Vulkan
 
    Instance::~Instance()
    {
+      Window::destroySurface(m_handle);
+      if (m_debugMessengerHandle != VK_NULL_HANDLE)
+         vkDestroyDebugUtilsMessengerEXT(m_handle, m_debugMessengerHandle, nullptr);
       vkDestroyInstance(m_handle, nullptr);
    }
 
@@ -500,81 +503,121 @@ namespace Yxis::Vulkan
 
    void Swapchain::create()
    {
-      const VkPhysicalDevice physicalDevice = m_device.getPhysicalHandle();
-      const VkSurfaceCapabilitiesKHR surfaceCapabilities = Window::getSurfaceCapabilities(physicalDevice);
-      const Window::surfaceformats_t surfaceFormats = Window::getAvailableSurfaceFormats(physicalDevice);
-      const Window::presentmodes_t presentModes = Window::getAvailableSurfacePresentModes(physicalDevice);
-
-      uint32_t imageCount = surfaceCapabilities.minImageCount + 1;
-      if (surfaceCapabilities.maxImageCount > imageCount)
       {
-         imageCount = std::clamp<uint32_t>(imageCount, surfaceCapabilities.minImageCount, surfaceCapabilities.maxImageCount);
+         const VkPhysicalDevice physicalDevice = m_device.getPhysicalHandle();
+         const VkSurfaceCapabilitiesKHR surfaceCapabilities = Window::getSurfaceCapabilities(physicalDevice);
+         const Window::surfaceformats_t surfaceFormats = Window::getAvailableSurfaceFormats(physicalDevice);
+         const Window::presentmodes_t presentModes = Window::getAvailableSurfacePresentModes(physicalDevice);
+
+         uint32_t imageCount = surfaceCapabilities.minImageCount + 1;
+         if (surfaceCapabilities.maxImageCount > imageCount)
+         {
+            imageCount = std::clamp<uint32_t>(imageCount, surfaceCapabilities.minImageCount, surfaceCapabilities.maxImageCount);
+         }
+
+         auto chooseFormat = [](const Window::surfaceformats_t& formats) -> const VkSurfaceFormatKHR& {
+            for (const auto& format : formats)
+            {
+               if (format.format == VK_FORMAT_R8G8B8A8_SRGB &&
+                  format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+               {
+                  return format;
+               }
+            }
+
+            return formats[0]; // return first position if desired format wasn't found
+         };
+
+         auto choosePresentMode = [](const Window::presentmodes_t& presentModes) -> const VkPresentModeKHR {
+            for (const auto& presentMode : presentModes)
+            {
+               if (presentMode == VK_PRESENT_MODE_MAILBOX_KHR) return presentMode;
+            }
+
+            return VK_PRESENT_MODE_FIFO_KHR; // FIFO is always supported
+         };
+
+         auto& [format, colorSpace] = chooseFormat(surfaceFormats);
+         m_swapchainFormat = format;
+         m_swapchainColorSpace = colorSpace;
+
+         const VkSwapchainCreateInfoKHR createInfo =
+         {
+            .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+            .pNext = nullptr,
+            .flags = 0,
+            .surface = Window::getSurface(),
+            .minImageCount = imageCount,
+            .imageFormat = m_swapchainFormat,
+            .imageColorSpace = m_swapchainColorSpace,
+            .imageExtent = surfaceCapabilities.currentExtent,
+            .imageArrayLayers = 1,
+            .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
+            .queueFamilyIndexCount = 1,
+            .pQueueFamilyIndices = &m_device.getQueueFamilies().gfxQueueIndex,
+            .preTransform = surfaceCapabilities.currentTransform,
+            .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+            .presentMode = choosePresentMode(presentModes),
+            .clipped = VK_FALSE,
+            .oldSwapchain = VK_NULL_HANDLE
+         };
+
+         VkResult res = vkCreateSwapchainKHR(m_device.getHandle(), &createInfo, nullptr, &m_handle);
+         if (res != VK_SUCCESS)
+         {
+            throw std::runtime_error(fmt::format("Failed to create swapchain. {}", string_VkResult(res)));
+         }
       }
 
-      m_swapchainImages.resize(imageCount);
-
-      auto chooseFormat = [](const Window::surfaceformats_t& formats) -> const VkSurfaceFormatKHR& {
-         for (const auto& format : formats)
+      {
+         uint32_t imageCount;
+         vkGetSwapchainImagesKHR(m_device.getHandle(), m_handle, &imageCount, nullptr);
+         m_swapchainImages.resize(imageCount);
+         m_swapchainImageViews.resize(imageCount);
+         VkResult res = vkGetSwapchainImagesKHR(m_device.getHandle(), m_handle, &imageCount, m_swapchainImages.data());
+         if (res != VK_SUCCESS)
          {
-            if (format.format == VK_FORMAT_R8G8B8A8_SRGB &&
-               format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+            throw std::runtime_error(fmt::format("Failed to acquire swapchain images. {}", string_VkResult(res)));
+         }
+      }
+
+      {
+         for (size_t i = 0; i < m_swapchainImages.size(); i++)
+         {
+            const VkImageViewCreateInfo createInfo =
             {
-               return format;
+               .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+               .pNext = nullptr,
+               .flags = 0,
+               .image = m_swapchainImages[i],
+               .viewType = VK_IMAGE_VIEW_TYPE_2D,
+               .format = m_swapchainFormat,
+               .components = {.r = VK_COMPONENT_SWIZZLE_IDENTITY, .g = VK_COMPONENT_SWIZZLE_IDENTITY, .b = VK_COMPONENT_SWIZZLE_IDENTITY, .a = VK_COMPONENT_SWIZZLE_IDENTITY },
+               .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1 }
+            };
+
+            VkResult res = vkCreateImageView(m_device.getHandle(), &createInfo, nullptr, &m_swapchainImageViews[i]);
+            if (res != VK_SUCCESS)
+            {
+               throw std::runtime_error(fmt::format("Failed to create image view no. {}. {}", i + 1, string_VkResult(res)));
             }
          }
-
-         return formats[0]; // return first position if desired format wasn't found
-      };
-
-      auto choosePresentMode = [](const Window::presentmodes_t& presentModes) -> const VkPresentModeKHR {
-         for (const auto& presentMode : presentModes)
-         {
-            if (presentMode == VK_PRESENT_MODE_MAILBOX_KHR) return presentMode;
-         }
-
-         return VK_PRESENT_MODE_FIFO_KHR; // FIFO is always supported
-      };
-
-      const auto& format = chooseFormat(surfaceFormats);
-
-      const VkSwapchainCreateInfoKHR createInfo =
-      {
-         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
-         .pNext = nullptr,
-         .flags = 0,
-         .surface = Window::getSurface(),
-         .minImageCount = imageCount,
-         .imageFormat = format.format,
-         .imageColorSpace = format.colorSpace,
-         .imageExtent = surfaceCapabilities.currentExtent,
-         .imageArrayLayers = 1,
-         .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-         .imageSharingMode = VK_SHARING_MODE_EXCLUSIVE,
-         .queueFamilyIndexCount = 1,
-         .pQueueFamilyIndices = &m_device.getQueueFamilies().gfxQueueIndex,
-         .preTransform = surfaceCapabilities.currentTransform,
-         .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-         .presentMode = choosePresentMode(presentModes),
-         .clipped = VK_FALSE,
-         .oldSwapchain = VK_NULL_HANDLE
-      };
-
-      VkResult res = vkCreateSwapchainKHR(m_device.getHandle(), &createInfo, nullptr, &m_handle);
-      if (res != VK_SUCCESS)
-      {
-         throw std::runtime_error(fmt::format("Failed to create swapchain. {}", string_VkResult(res)));
-      }
-
-      res = vkGetSwapchainImagesKHR(m_device.getHandle(), m_handle, &imageCount, m_swapchainImages.data());
-      if (res != VK_SUCCESS)
-      {
-         throw std::runtime_error(fmt::format("Failed to acquire swapchain images. {}", string_VkResult(res)));
       }
    }
 
    Swapchain::~Swapchain()
    {
+      const auto device = m_device.getHandle();
+
       if (m_handle != VK_NULL_HANDLE)
-         vkDestroySwapchainKHR(m_device.getHandle(), m_handle, nullptr);
+      {
+         vkDestroySwapchainKHR(device, m_handle, nullptr);
+
+         for (const auto& imageView : m_swapchainImageViews)
+         {
+            vkDestroyImageView(device, imageView, nullptr);
+         }
+      }
    }
 }

@@ -114,6 +114,9 @@ namespace Yxis::Vulkan
    private:
       const Device& m_device;
       VkSwapchainKHR m_handle = VK_NULL_HANDLE;
+      VkFormat m_swapchainFormat = VK_FORMAT_MAX_ENUM;
+      VkColorSpaceKHR m_swapchainColorSpace = VK_COLOR_SPACE_MAX_ENUM_KHR;
       std::vector<VkImage> m_swapchainImages;
+      std::vector<VkImageView> m_swapchainImageViews;
    };
 }

@@ -105,9 +105,13 @@ namespace Yxis
       s_windowInitialized = true;
    }
 
+   void Window::destroySurface(VkInstance instance)
+   {
+      assert(instance != VK_NULL_HANDLE && "instance is null");
+      vkDestroySurfaceKHR(instance, s_surfaceHandle, nullptr);
+   }
+
    Window::~Window()
    {
-      if (s_surfaceHandle != VK_NULL_HANDLE && s_instance != VK_NULL_HANDLE)
-         vkDestroySurfaceKHR(s_instance, s_surfaceHandle, nullptr);
    }
 }
