@@ -1,10 +1,7 @@
 #include <Yxis/Application.h>
 #include <Yxis/Logger.h>
-#include <SDL3/SDL.h>
-#include <volk.h>
-#include <vector>
-#include <algorithm>
-#include "VulkanBackend.h"
+#include <Yxis/Events/IKeyboardEvent.h>
+#include <Yxis/Events/EventDispatcher.h>
 #include "Window.h"
 
 namespace Yxis
@@ -27,23 +24,16 @@ namespace Yxis
       if (m_running) return;
       else m_running = true;
 
-      // initialize vulkan here because it may throw an error
-      Vulkan::Instance instance(m_name, { 1, 0, 0 });
-      instance.initialize();
-      Window::createSurface(instance.getHandle());
-
-      Vulkan::Device device = instance.getBestDevice();
-      device.initialize();
-
-      Vulkan::Swapchain swapchain(device);
-      swapchain.create();
-
       while (m_running)
       {
          SDL_Event event;
          while (SDL_PollEvent(&event))
          {
-            if (event.type == SDL_EVENT_QUIT) m_running = false;
+             if (event.type == SDL_EVENT_QUIT) m_running = false;
+             if (event.type == SDL_EVENT_KEY_DOWN && event.key.repeat == false)
+                 Events::EventDispatcher::dispatch(std::make_shared<Events::IKeyboardEvent>(true, event.key.key, event.key.mod));
+             if (event.type == SDL_EVENT_KEY_UP && event.key.repeat == false)
+                 Events::EventDispatcher::dispatch(std::make_shared<Events::IKeyboardEvent>(false, event.key.key, event.key.mod));
          }
       }
    }

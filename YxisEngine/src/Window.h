@@ -1,11 +1,6 @@
 #pragma once
 
-#include <SDL3/SDL.h>
-#include <SDL3/SDL_vulkan.h>
-#include <volk.h>
-#include <memory>
-#include <string_view>
-#include <vector>
+#include "internal_pch.h"
 
 namespace Yxis
 {
@@ -27,17 +22,9 @@ namespace Yxis
       ~Window();
 
       static window_t& getWindow();
-      static VkSurfaceKHR getSurface();
-      static VkSurfaceCapabilitiesKHR getSurfaceCapabilities(VkPhysicalDevice physicalDevice);
-      static const surfaceformats_t getAvailableSurfaceFormats(VkPhysicalDevice physicalDevice);
-      static const presentmodes_t getAvailableSurfacePresentModes(VkPhysicalDevice physicalDevice);
-      static void createSurface(VkInstance instance);
-      static void destroySurface(VkInstance instance);
       static void initialize(const std::string_view title);
    private:
-      static VkInstance s_instance;
       static bool s_windowInitialized;
       static window_t s_windowHandle;
-      static VkSurfaceKHR s_surfaceHandle;
    };
 }
