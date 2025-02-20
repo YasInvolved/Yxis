@@ -1,11 +1,8 @@
 #pragma once
 
+#include <Yxis/pch.h>
 #include <Yxis/definitions.h>
 #include <Yxis/Events/IEvent.h>
-#include <functional>
-#include <unordered_map>
-#include <memory>
-#include <typeindex>
 
 namespace Yxis::Events
 {

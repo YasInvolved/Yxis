@@ -1,0 +1,9 @@
+#pragma once
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/sinks/basic_file_sink.h>
+#include <memory>
+#include <string>
+#include <functional>
+#include <unordered_map>
+#include <typeindex>
