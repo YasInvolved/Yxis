@@ -109,6 +109,7 @@ VulkanRenderer::VulkanRenderer(const std::string& appName)
 #endif
    }
 
+   VkPhysicalDevice selectedDevice = VK_NULL_HANDLE;
    {
       uint32_t devicesCount;
       vkEnumeratePhysicalDevices(m_instance, &devicesCount, nullptr);
@@ -125,19 +126,17 @@ VulkanRenderer::VulkanRenderer(const std::string& appName)
 
          // discrete gpu is likely the most powerful, i leave it like this just for now
          if (properties.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
-            m_physical = physicalDevice;
+            selectedDevice = physicalDevice;
       }
 
-      if (m_physical == VK_NULL_HANDLE)
-         m_physical = physicalDevices[0];
+      if (selectedDevice == VK_NULL_HANDLE)
+         selectedDevice = physicalDevices[0];
    }
 
    {
-      const std::vector<VkQueueFamilyProperties2> queueFamilies = std::move(Utils::getDeviceQueueFamilies(m_physical));
+      const std::vector<VkQueueFamilyProperties2> queueFamilies = std::move(Utils::getDeviceQueueFamilies(selectedDevice));
 
-      uint32_t gfxQueueIndex = 0;
-      std::optional<uint32_t> computeQueueIndex;
-      std::optional<uint32_t> transferQueueIndex;
+      QueueFamilyIndices queueFamilyIndices;
 
       for (uint32_t i = 0; i < queueFamilies.size(); i++)
       {
@@ -145,27 +144,30 @@ VulkanRenderer::VulkanRenderer(const std::string& appName)
          
          if (Utils::deviceQueueHasCapabilities(properties, VK_QUEUE_GRAPHICS_BIT))
          {
-            gfxQueueIndex = i;
+            queueFamilyIndices.gfxIndex = i;
             continue;
          }
 
-         if (not computeQueueIndex.has_value() && Utils::deviceQueueHasCapabilities(properties, VK_QUEUE_COMPUTE_BIT))
-         {
-            computeQueueIndex = i;
-            continue;
-         }
+         if (not queueFamilyIndices.computeIndex.has_value() && Utils::deviceQueueHasCapabilities(properties, VK_QUEUE_COMPUTE_BIT))
+            queueFamilyIndices.computeIndex = i;
 
-         if (not transferQueueIndex.has_value() && Utils::deviceQueueHasCapabilities(properties, VK_QUEUE_TRANSFER_BIT))
-         {
-            transferQueueIndex = i;
-            continue;
-         }
+         if (not queueFamilyIndices.transferIndex.has_value() && Utils::deviceQueueHasCapabilities(properties, VK_QUEUE_TRANSFER_BIT))
+            queueFamilyIndices.transferIndex = i;
+
+         if (not queueFamilyIndices.sparseBindingIndex.has_value() && Utils::deviceQueueHasCapabilities(properties, VK_QUEUE_SPARSE_BINDING_BIT))
+            queueFamilyIndices.sparseBindingIndex = i;
+
+         if (not queueFamilyIndices.opticalFlowIndex.has_value() && Utils::deviceQueueHasCapabilities(properties, VK_QUEUE_OPTICAL_FLOW_BIT_NV))
+            queueFamilyIndices.opticalFlowIndex = i;
       }
+
+      m_device = std::make_unique<Device>(selectedDevice, std::move(queueFamilyIndices));
    }
 }
 
 VulkanRenderer::~VulkanRenderer()
 {
+   m_device.reset();
 #ifdef YX_DEBUG
    if (m_debugMessenger != VK_NULL_HANDLE)
    {

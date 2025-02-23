@@ -43,4 +43,9 @@ namespace Yxis
          }
       }
    }
+
+   void Application::exit()
+   {
+      m_running = false;
+   }
 }

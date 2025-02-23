@@ -1,5 +1,7 @@
 #pragma once
 
+#include "Device.h"
+
 namespace Yxis::Vulkan
 {
 	class VulkanRenderer
@@ -14,7 +16,6 @@ namespace Yxis::Vulkan
 #ifdef YX_DEBUG
 		VkDebugUtilsMessengerEXT m_debugMessenger = VK_NULL_HANDLE;
 #endif
-		VkPhysicalDevice m_physical = VK_NULL_HANDLE;
-		VkDevice m_device = VK_NULL_HANDLE;
+		std::unique_ptr<Device> m_device;
 	};
 }

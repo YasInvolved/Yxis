@@ -12,6 +12,9 @@ namespace Yxis
       virtual ~Application();
 
       void run();
+
+   protected:
+      void exit();
    private:
       const std::string m_name;
       bool m_running = false;
