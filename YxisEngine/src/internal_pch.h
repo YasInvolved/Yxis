@@ -2,20 +2,23 @@
 
 // all STL things and libs go here
 
+#define VK_NO_PROTOTYPES
+
+#include "Vulkan/vk_enum_string_helper.h"
 #include <algorithm>
-#include <memory>
-#include <vector>
-#include <queue>
-#include <utility>
-#include <thread>
-#include <mutex>
+#include <atomic>
 #include <condition_variable>
+#include <functional>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <queue>
 #include <volk.h>
-#include <string>
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
-#include <functional>
-#include <unordered_map>
+#include <string>
+#include <thread>
 #include <typeindex>
-#include <atomic>
-#include "Vulkan/vk_enum_string_helper.h"
+#include <unordered_map>
+#include <utility>
+#include <vector>

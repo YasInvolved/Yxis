@@ -1,6 +1,7 @@
 #include "VulkanRenderer.h"
 #include "../Window.h"
 #include <Yxis/Logger.h>
+#include "VulkanUtilities.h"
 
 using namespace Yxis::Vulkan;
 
@@ -48,34 +49,6 @@ static constexpr VkDebugUtilsMessengerCreateInfoEXT DEBUG_MESSENGER_CREATE_INFO 
    .pfnUserCallback = DebugMessengerCallback,
    .pUserData = nullptr,
 };
-
-static void getDeviceFeatures(VkPhysicalDevice physicalDevice, VkPhysicalDeviceFeatures2& features)
-{
-   features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
-   
-   // link structures (vk14 -> vk13 -> vk12 -> vk11)
-   VkPhysicalDeviceVulkan11Features vulkan11Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
-   VkPhysicalDeviceVulkan12Features vulkan12Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES, &vulkan11Features };
-   VkPhysicalDeviceVulkan13Features vulkan13Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES, &vulkan12Features };
-   VkPhysicalDeviceVulkan14Features vulkan14Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES, &vulkan13Features };
-   features.pNext = &vulkan14Features;
-
-   vkGetPhysicalDeviceFeatures2(physicalDevice, &features);
-}
-
-static void getDeviceProperties(VkPhysicalDevice physicalDevice, VkPhysicalDeviceProperties2& properties)
-{
-   properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-
-   // link structures (vk14 -> vk13 -> vk12 -> vk11)
-   VkPhysicalDeviceVulkan11Properties vulkan11Properties{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_PROPERTIES };
-   VkPhysicalDeviceVulkan12Properties vulkan12Properties{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_PROPERTIES, &vulkan11Properties };
-   VkPhysicalDeviceVulkan13Properties vulkan13Properties{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_PROPERTIES, &vulkan12Properties };
-   VkPhysicalDeviceVulkan14Properties vulkan14Properties{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_PROPERTIES, &vulkan13Properties };
-   properties.pNext = &vulkan14Properties;
-
-   vkGetPhysicalDeviceProperties2(physicalDevice, &properties);
-}
 
 VulkanRenderer::VulkanRenderer(const std::string& appName)
 	: m_appName(appName)
@@ -144,18 +117,49 @@ VulkanRenderer::VulkanRenderer(const std::string& appName)
 
       for (const auto& physicalDevice : physicalDevices)
       {
-         VkPhysicalDeviceFeatures2 features;
-         getDeviceFeatures(physicalDevice, features);
-
-         VkPhysicalDeviceProperties2 properties;
-         getDeviceProperties(physicalDevice, properties);
-
-         VkPhysicalDeviceMemoryProperties2 memoryProperties{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2 };
-         vkGetPhysicalDeviceMemoryProperties2(physicalDevice, &memoryProperties);
+         VkPhysicalDeviceProperties2 properties = Utils::getDeviceProperties(physicalDevice);
 
          YX_CORE_LOGGER->info("Found device!");
          YX_CORE_LOGGER->info("Name: {}", properties.properties.deviceName);
          YX_CORE_LOGGER->info("Type: {}", string_VkPhysicalDeviceType(properties.properties.deviceType));
+
+         // discrete gpu is likely the most powerful, i leave it like this just for now
+         if (properties.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+            m_physical = physicalDevice;
+      }
+
+      if (m_physical == VK_NULL_HANDLE)
+         m_physical = physicalDevices[0];
+   }
+
+   {
+      const std::vector<VkQueueFamilyProperties2> queueFamilies = std::move(Utils::getDeviceQueueFamilies(m_physical));
+
+      uint32_t gfxQueueIndex = 0;
+      std::optional<uint32_t> computeQueueIndex;
+      std::optional<uint32_t> transferQueueIndex;
+
+      for (uint32_t i = 0; i < queueFamilies.size(); i++)
+      {
+         const auto& properties = queueFamilies[i].queueFamilyProperties;
+         
+         if (Utils::deviceQueueHasCapabilities(properties, VK_QUEUE_GRAPHICS_BIT))
+         {
+            gfxQueueIndex = i;
+            continue;
+         }
+
+         if (not computeQueueIndex.has_value() && Utils::deviceQueueHasCapabilities(properties, VK_QUEUE_COMPUTE_BIT))
+         {
+            computeQueueIndex = i;
+            continue;
+         }
+
+         if (not transferQueueIndex.has_value() && Utils::deviceQueueHasCapabilities(properties, VK_QUEUE_TRANSFER_BIT))
+         {
+            transferQueueIndex = i;
+            continue;
+         }
       }
    }
 }
