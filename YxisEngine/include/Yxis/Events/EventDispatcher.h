@@ -14,6 +14,7 @@ namespace Yxis::Events
 		template <typename EventType>
 		static void subscribe(Handler handler)
 		{
+			static_assert(std::is_base_of_v<IEvent, EventType> && "EventType must be derived from IEvent");
 			m_handlers[typeid(EventType)].emplace_back(handler);
 		}
 

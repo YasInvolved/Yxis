@@ -7,7 +7,7 @@
 namespace Yxis
 {
    bool Window::s_windowInitialized = false;
-   Window::window_t Window::s_windowHandle = nullptr;
+   Window::WindowPtr Window::s_windowHandle = nullptr;
 
    void Window::initialize(const std::string_view title)
    {
@@ -31,9 +31,18 @@ namespace Yxis
          return a->w < b->w && a->refresh_rate < b->refresh_rate;
          });
 
-      SDL_Window* ptr = SDL_CreateWindow(title.data(), displayModes[0]->w, displayModes[0]->h, SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_VULKAN);
+      SDL_Window* ptr = SDL_CreateWindow(title.data(), displayModes[0]->w, displayModes[0]->h, SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
       s_windowHandle.reset(ptr);
       s_windowInitialized = true;
+   }
+
+   const std::vector<const char*> Window::getRequiredInstanceExtensions()
+   {
+      uint32_t extensionsCount;
+      SDL_Vulkan_GetInstanceExtensions(&extensionsCount);
+      std::vector<const char*> requiredExtensions(extensionsCount);
+      std::memcpy(requiredExtensions.data(), SDL_Vulkan_GetInstanceExtensions(&extensionsCount), extensionsCount * sizeof(const char*));
+      return requiredExtensions;
    }
 
    Window::~Window()

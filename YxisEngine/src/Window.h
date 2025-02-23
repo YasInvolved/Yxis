@@ -15,16 +15,16 @@ namespace Yxis
          }
       };
 
-      using window_t = std::unique_ptr<SDL_Window, WindowDestructor>;
-      using surfaceformats_t = std::vector<VkSurfaceFormatKHR>;
-      using presentmodes_t = std::vector<VkPresentModeKHR>;
-
+      using WindowPtr = std::unique_ptr<SDL_Window, WindowDestructor>;
+      using SurfaceFormats = std::vector<VkSurfaceFormatKHR>;
+      using PresentModes = std::vector<VkPresentModeKHR>;
+      
       ~Window();
 
-      static window_t& getWindow();
       static void initialize(const std::string_view title);
+      static const std::vector<const char*> getRequiredInstanceExtensions();
    private:
       static bool s_windowInitialized;
-      static window_t s_windowHandle;
+      static WindowPtr s_windowHandle;
    };
 }

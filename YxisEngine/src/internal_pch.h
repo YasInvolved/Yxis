@@ -2,6 +2,7 @@
 
 // all STL things and libs go here
 
+#include <algorithm>
 #include <memory>
 #include <vector>
 #include <queue>
@@ -17,3 +18,4 @@
 #include <unordered_map>
 #include <typeindex>
 #include <atomic>
+#include "Vulkan/vk_enum_string_helper.h"
