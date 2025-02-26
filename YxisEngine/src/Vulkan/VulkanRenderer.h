@@ -7,15 +7,20 @@ namespace Yxis::Vulkan
 	class VulkanRenderer
 	{
 	public:
-		VulkanRenderer(const std::string& appName);
-		~VulkanRenderer();
+		using DevicePtr = std::unique_ptr<Device>;
+
+		static void initialize(const std::string& appName);
+		static void destroy();
+
+		static const std::string& getAppName();
+		static const VkInstance getInstance();
+		static const DevicePtr& getDevice();
 	private:
-		const std::string m_appName;
-		
-		VkInstance m_instance = VK_NULL_HANDLE;
+		static std::string m_appName;
+		static VkInstance m_instance;
 #ifdef YX_DEBUG
-		VkDebugUtilsMessengerEXT m_debugMessenger = VK_NULL_HANDLE;
+		static VkDebugUtilsMessengerEXT m_debugMessenger;
 #endif
-		std::unique_ptr<Device> m_device;
+		static DevicePtr m_device;
 	};
 }

@@ -7,6 +7,14 @@ using namespace Yxis::Vulkan;
 
 constexpr uint32_t ENGINE_VERSION = VK_MAKE_VERSION(1, 0, 0);
 
+// class fields
+std::string VulkanRenderer::m_appName;
+VkInstance VulkanRenderer::m_instance = VK_NULL_HANDLE;
+#ifdef YX_DEBUG
+VkDebugUtilsMessengerEXT VulkanRenderer::m_debugMessenger = VK_NULL_HANDLE;
+#endif
+std::unique_ptr<Device> VulkanRenderer::m_device;
+
 static VkBool32 DebugMessengerCallback(
    VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
    VkDebugUtilsMessageTypeFlagsEXT  messageTypes,
@@ -50,9 +58,9 @@ static constexpr VkDebugUtilsMessengerCreateInfoEXT DEBUG_MESSENGER_CREATE_INFO 
    .pUserData = nullptr,
 };
 
-VulkanRenderer::VulkanRenderer(const std::string& appName)
-	: m_appName(appName)
+void VulkanRenderer::initialize(const std::string& appName)
 {
+   m_appName = appName;
    volkInitialize();
    VkResult result;
 
@@ -144,7 +152,7 @@ VulkanRenderer::VulkanRenderer(const std::string& appName)
       for (uint32_t i = 0; i < queueFamilies.size(); i++)
       {
          const auto& properties = queueFamilies[i].queueFamilyProperties;
-         
+
          if (Utils::deviceQueueHasCapabilities(properties, VK_QUEUE_GRAPHICS_BIT))
          {
             queueFamilyIndices.gfxIndex = i;
@@ -168,7 +176,22 @@ VulkanRenderer::VulkanRenderer(const std::string& appName)
    }
 }
 
-VulkanRenderer::~VulkanRenderer()
+const std::string& VulkanRenderer::getAppName()
+{
+   return m_appName;
+}
+
+const VkInstance VulkanRenderer::getInstance()
+{
+   return m_instance;
+}
+
+const VulkanRenderer::DevicePtr& VulkanRenderer::getDevice()
+{
+   return m_device;
+}
+
+void VulkanRenderer::destroy()
 {
    m_device.reset();
 #ifdef YX_DEBUG

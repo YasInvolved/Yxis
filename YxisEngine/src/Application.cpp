@@ -26,7 +26,7 @@ namespace Yxis
       if (m_running) return;
       else m_running = true;
 
-      Vulkan::VulkanRenderer renderer(m_name);
+      Vulkan::VulkanRenderer::initialize(m_name);
 
       while (m_running)
       {
@@ -42,6 +42,8 @@ namespace Yxis
                  Events::EventDispatcher::dispatch(std::make_shared<Events::IWindowResizedEvent>(event.window.data1, event.window.data2));
          }
       }
+
+      Vulkan::VulkanRenderer::destroy();
    }
 
    void Application::exit()
