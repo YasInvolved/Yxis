@@ -23,7 +23,11 @@ namespace Yxis
 
       static void initialize(const std::string_view title);
       static const std::vector<const char*> getRequiredInstanceExtensions();
+      static const VkSurfaceKHR createSurface(const VkInstance instance);
+      static const VkSurfaceKHR getSurface();
+      static void destroySurface(const VkInstance instance);
    private:
+      static VkSurfaceKHR s_surface;
       static bool s_windowInitialized;
       static WindowPtr s_windowHandle;
    };

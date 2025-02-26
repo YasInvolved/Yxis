@@ -8,6 +8,7 @@ namespace Yxis
 {
    bool Window::s_windowInitialized = false;
    Window::WindowPtr Window::s_windowHandle = nullptr;
+   VkSurfaceKHR Window::s_surface = VK_NULL_HANDLE;
 
    void Window::initialize(const std::string_view title)
    {
@@ -43,6 +44,26 @@ namespace Yxis
       std::vector<const char*> requiredExtensions(extensionsCount);
       std::memcpy(requiredExtensions.data(), SDL_Vulkan_GetInstanceExtensions(&extensionsCount), extensionsCount * sizeof(const char*));
       return requiredExtensions;
+   }
+
+   const VkSurfaceKHR Window::createSurface(const VkInstance instance)
+   {
+      if (not SDL_Vulkan_CreateSurface(s_windowHandle.get(), instance, nullptr, &s_surface))
+         throw std::runtime_error("Failed to create surface");
+
+      return s_surface;
+   }
+
+   const VkSurfaceKHR Window::getSurface()
+   {
+      assert(s_surface != VK_NULL_HANDLE && "Surface wasn't initialized");
+      return s_surface;
+   }
+
+   void Window::destroySurface(const VkInstance instance)
+   {
+      assert(s_surface != VK_NULL_HANDLE && "Surface wasn't initialized");
+      SDL_Vulkan_DestroySurface(instance, s_surface, nullptr);
    }
 
    Window::~Window()

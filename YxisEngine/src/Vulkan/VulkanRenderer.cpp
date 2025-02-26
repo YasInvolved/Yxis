@@ -60,6 +60,7 @@ VulkanRenderer::VulkanRenderer(const std::string& appName)
       auto instanceExtensions = Window::getRequiredInstanceExtensions();
 #ifdef YX_DEBUG
       instanceExtensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+      instanceExtensions.emplace_back("VK_KHR_get_surface_capabilities2");
       constexpr const char* INSTANCE_ENABLED_LAYERS[] = { "VK_LAYER_KHRONOS_validation" };
 #else
       constexpr const char* INSTANCE_ENABLED_LAYERS = {  };
@@ -108,6 +109,8 @@ VulkanRenderer::VulkanRenderer(const std::string& appName)
       }
 #endif
    }
+
+   Window::createSurface(m_instance);
 
    VkPhysicalDevice selectedDevice = VK_NULL_HANDLE;
    {
@@ -174,6 +177,7 @@ VulkanRenderer::~VulkanRenderer()
       vkDestroyDebugUtilsMessengerEXT(m_instance, m_debugMessenger, nullptr);
    }
 #endif
+   Window::destroySurface(m_instance);
    if (m_instance != VK_NULL_HANDLE)
    {
       vkDestroyInstance(m_instance, nullptr);

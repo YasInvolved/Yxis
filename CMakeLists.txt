@@ -29,6 +29,7 @@ add_subdirectory(3rdparty/spdlog)
 add_subdirectory(3rdparty/SPIRV-Headers)
 add_subdirectory(3rdparty/SPIRV-Tools)
 add_subdirectory(3rdparty/glslang)
+add_subdirectory(3rdparty/VulkanMemoryAllocator)
 
 add_subdirectory(YxisEngine)
 add_subdirectory(YxisSandbox)

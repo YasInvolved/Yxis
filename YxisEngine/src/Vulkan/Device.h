@@ -4,6 +4,8 @@
 
 namespace Yxis::Vulkan
 {
+   class Swapchain;
+
    struct QueueFamilyIndices
    {
       uint32_t                gfxIndex;
@@ -21,9 +23,16 @@ namespace Yxis::Vulkan
 
       Device(const Device&) = delete;
       Device& operator=(const Device&) = delete;
+
+      const VkDevice getLogicalDevice() const;
+      const VkSurfaceCapabilities2KHR getSurfaceCapabilities() const;
+      const std::vector<VkSurfaceFormat2KHR> getSurfaceFormats() const;
+      const std::vector<VkPresentModeKHR> getPresentModes() const;
+      const QueueFamilyIndices& getQueueFamilyIndices() const;
    private:
       VkDevice m_device;
       VkPhysicalDevice m_physicalDevice;
+      std::unique_ptr<Swapchain> m_swapchain;
 
       struct {
          VkQueue graphicsQueue = VK_NULL_HANDLE;
