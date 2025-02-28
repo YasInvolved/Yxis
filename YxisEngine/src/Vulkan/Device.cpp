@@ -57,6 +57,8 @@ Device::Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndice
       queueInfo.queueFamilyIndex = m_queueFamilies.transferIndex.value();
       vkGetDeviceQueue2(m_device, &queueInfo, &m_queues.transferQueue);
    }
+
+   m_swapchain = std::make_unique<Swapchain>(this);
 }
 
 const VkDevice Device::getLogicalDevice() const
@@ -127,6 +129,7 @@ const QueueFamilyIndices& Device::getQueueFamilyIndices() const
 
 Device::~Device()
 {
+   m_swapchain.reset();
    if (m_device != VK_NULL_HANDLE)
       vkDestroyDevice(m_device, nullptr);
 }

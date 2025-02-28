@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../internal_pch.h"
+#include "Swapchain.h"
 
 namespace Yxis::Vulkan
 {
@@ -30,6 +31,8 @@ namespace Yxis::Vulkan
    private:
       VkDevice m_device;
       VkPhysicalDevice m_physicalDevice;
+
+      std::unique_ptr<Swapchain> m_swapchain;
 
       struct {
          VkQueue graphicsQueue = VK_NULL_HANDLE;
