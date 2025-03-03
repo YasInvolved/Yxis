@@ -3,7 +3,6 @@
 // all STL things and libs go here
 
 #define VK_NO_PROTOTYPES
-#define VMA_VULKAN_VERSION 1004000
 
 #include "Vulkan/vk_enum_string_helper.h"
 #include <algorithm>
@@ -23,4 +22,7 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
+#include <unordered_set>
+#include <variant>
+#include <random>
 #include <vk_mem_alloc.h>

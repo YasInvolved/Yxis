@@ -18,7 +18,13 @@ Device::Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndice
       queueCreateInfos.emplace_back(VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO, nullptr, 0, m_queueFamilies.transferIndex.value(), 1, &queuePriority);
 
    constexpr const char* deviceEnabledLayers[] = { nullptr }; // unintialized yet
-   constexpr const char* deviceEnabledExtensions[] = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+   constexpr const char* deviceEnabledExtensions[] = { 
+      VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+      VK_KHR_MAINTENANCE_5_EXTENSION_NAME,
+#ifdef YX_DEBUG
+      VK_EXT_DEBUG_MARKER_EXTENSION_NAME
+#endif
+   };
 
    VkDeviceCreateInfo deviceCreateInfo =
    {
@@ -59,11 +65,32 @@ Device::Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndice
    }
 
    m_swapchain = std::make_unique<Swapchain>(this);
+   m_memoryManager = std::make_unique<DeviceMemoryManager>(this);
+
+   // testing memory manager (TODO: Remove)
+   constexpr VkBufferCreateInfo testBuffer =
+   {
+      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+      .pNext = nullptr,
+      .flags = 0,
+      .size = 1024 * 1024,
+      .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+      .queueFamilyIndexCount = 0,
+      .pQueueFamilyIndices = nullptr,
+   };
+
+   VkBuffer buffer = m_memoryManager->createBuffer(testBuffer);
 }
 
 const VkDevice Device::getLogicalDevice() const
 {
    return m_device;
+}
+
+const VkPhysicalDevice Device::getPhysicalDevice() const
+{
+   return m_physicalDevice;
 }
 
 const VkSurfaceCapabilities2KHR Device::getSurfaceCapabilities() const
@@ -129,6 +156,7 @@ const QueueFamilyIndices& Device::getQueueFamilyIndices() const
 
 Device::~Device()
 {
+   m_memoryManager.reset();
    m_swapchain.reset();
    if (m_device != VK_NULL_HANDLE)
       vkDestroyDevice(m_device, nullptr);

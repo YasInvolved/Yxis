@@ -2,6 +2,7 @@
 
 #include "../internal_pch.h"
 #include "Swapchain.h"
+#include "DeviceMemoryManager.h"
 
 namespace Yxis::Vulkan
 {
@@ -24,6 +25,7 @@ namespace Yxis::Vulkan
       Device& operator=(const Device&) = delete;
 
       const VkDevice getLogicalDevice() const;
+      const VkPhysicalDevice getPhysicalDevice() const;
       const VkSurfaceCapabilities2KHR getSurfaceCapabilities() const;
       const std::vector<VkSurfaceFormat2KHR> getSurfaceFormats() const;
       const std::vector<VkPresentModeKHR> getPresentModes() const;
@@ -33,6 +35,7 @@ namespace Yxis::Vulkan
       VkPhysicalDevice m_physicalDevice;
 
       std::unique_ptr<Swapchain> m_swapchain;
+      std::unique_ptr<DeviceMemoryManager> m_memoryManager;
 
       struct {
          VkQueue graphicsQueue = VK_NULL_HANDLE;

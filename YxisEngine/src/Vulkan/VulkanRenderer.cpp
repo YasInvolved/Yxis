@@ -68,11 +68,12 @@ void VulkanRenderer::initialize(const std::string& appName)
       auto instanceExtensions = Window::getRequiredInstanceExtensions();
 #ifdef YX_DEBUG
       instanceExtensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-      instanceExtensions.emplace_back("VK_KHR_get_surface_capabilities2");
       constexpr const char* INSTANCE_ENABLED_LAYERS[] = { "VK_LAYER_KHRONOS_validation" };
 #else
       constexpr const char* INSTANCE_ENABLED_LAYERS = {  };
 #endif
+      instanceExtensions.emplace_back("VK_KHR_get_surface_capabilities2");
+      instanceExtensions.emplace_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
 
       const VkApplicationInfo appInfo =
       {

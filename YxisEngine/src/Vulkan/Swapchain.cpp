@@ -63,31 +63,29 @@ Swapchain::Swapchain(const Device* device)
          throw std::runtime_error(fmt::format("Failed to create swapchain. {}", string_VkResult(result)));
    }
 
+   uint32_t imageCount;
+   vkGetSwapchainImagesKHR(m_device->getLogicalDevice(), m_swapchain, &imageCount, nullptr);
+   m_swapchainImages.resize(imageCount);
+   m_swapchainImageViews.resize(imageCount);
+   vkGetSwapchainImagesKHR(m_device->getLogicalDevice(), m_swapchain, &imageCount, m_swapchainImages.data());
+
+   VkImageViewCreateInfo createInfo =
    {
-      uint32_t imageCount;
-      vkGetSwapchainImagesKHR(m_device->getLogicalDevice(), m_swapchain, &imageCount, nullptr);
-      m_swapchainImages.resize(imageCount);
-      m_swapchainImageViews.resize(imageCount);
-      vkGetSwapchainImagesKHR(m_device->getLogicalDevice(), m_swapchain, &imageCount, m_swapchainImages.data());
+      .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+      .pNext = nullptr,
+      .flags = 0,
+      .viewType = VK_IMAGE_VIEW_TYPE_2D,
+      .format = surfaceFormat.format,
+      .components = { VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY },
+      .subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 }
+   };
 
-      VkImageViewCreateInfo createInfo =
-      {
-         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-         .pNext = nullptr,
-         .flags = 0,
-         .viewType = VK_IMAGE_VIEW_TYPE_2D,
-         .format = surfaceFormat.format,
-         .components = { VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY },
-         .subresourceRange = { VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 }
-      };
-
-      for (uint32_t i = 0; i < imageCount; i++)
-      {
-         createInfo.image = m_swapchainImages[i];
-         VkResult result = vkCreateImageView(m_device->getLogicalDevice(), &createInfo, nullptr, &m_swapchainImageViews[i]);
-         if (result != VK_SUCCESS)
-            throw std::runtime_error(fmt::format("Failed to create image view for swapchain image index {}. {}", i, string_VkResult(result)));
-      }
+   for (uint32_t i = 0; i < imageCount; i++)
+   {
+      createInfo.image = m_swapchainImages[i];
+      VkResult result = vkCreateImageView(m_device->getLogicalDevice(), &createInfo, nullptr, &m_swapchainImageViews[i]);
+      if (result != VK_SUCCESS)
+         throw std::runtime_error(fmt::format("Failed to create image view for swapchain image index {}. {}", i, string_VkResult(result)));
    }
 }
 
