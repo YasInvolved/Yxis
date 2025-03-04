@@ -9,13 +9,6 @@
 
 using namespace Yxis::Vulkan;
 
-static constexpr VkDeviceSize STAGING_BUFFER_SIZE = 100 * 1024 * 1024; // 100mb
-constexpr VmaAllocationCreateInfo STAGING_BUFFER_ALLOC_CREATE_INFO =
-{
-   .usage = VMA_MEMORY_USAGE_AUTO,
-   .requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
-};
-
 DeviceMemoryManager::DeviceMemoryManager(const Device* device)
    : m_device(device)
 {
@@ -42,6 +35,35 @@ DeviceMemoryManager::DeviceMemoryManager(const Device* device)
    VkResult result = vmaCreateAllocator(&allocatorCreateInfo, &m_allocator);
    if (result != VK_SUCCESS)
       throw std::runtime_error(fmt::format("Failed to create device memory allocator. {}", string_VkResult(result)));
+
+   {
+      constexpr VkDeviceSize STAGING_BUFFER_SIZE = 256 * 1024 * 1024; // 256mb
+      constexpr VmaAllocationCreateInfo allocCreateInfo =
+      {
+         .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
+         .usage = VMA_MEMORY_USAGE_AUTO,
+         .requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+      };
+      
+      const VkBufferCreateInfo createInfo =
+      {
+         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+         .pNext = nullptr,
+         .flags = 0,
+         .size = STAGING_BUFFER_SIZE,
+         .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+         .queueFamilyIndexCount = 1,
+         .pQueueFamilyIndices = &m_device->getQueueFamilyIndices().transferIndex.value(),
+      };
+     
+      VmaAllocationInfo allocInfo;
+      result = vmaCreateBuffer(m_allocator, &createInfo, &allocCreateInfo, &m_stagingBuffer.buffer, &m_stagingBuffer.allocation, &allocInfo);
+      if (result != VK_SUCCESS)
+         throw std::runtime_error(fmt::format("Failed to create staging buffer. {}", string_VkResult(result)));
+
+      m_stagingBuffer.mappedMemory = allocInfo.pMappedData;
+   }
 
    {
       const VkCommandPoolCreateInfo createInfo =
@@ -89,42 +111,6 @@ DeviceMemoryManager::DeviceMemoryManager(const Device* device)
       };
 
       vkBeginCommandBuffer(m_transferCommandBuffer, &beginInfo);
-
-      const VkFenceCreateInfo fenceCreateInfo{ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, nullptr, 0 };
-      vkCreateFence(logicalDevice, &fenceCreateInfo, nullptr, &m_transferFence);
-   }
-
-   {
-      const VkBufferCreateInfo createInfo =
-      {
-         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-         .pNext = nullptr,
-         .flags = 0,
-         .size = STAGING_BUFFER_SIZE,
-         .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-         .queueFamilyIndexCount = 1,
-         .pQueueFamilyIndices = &device->getQueueFamilyIndices().transferIndex.value(),
-      };
-
-      result = vmaCreateBuffer(m_allocator, &createInfo, &STAGING_BUFFER_ALLOC_CREATE_INFO, &m_stagingBuffer, &m_stagingBufferMemory, nullptr);
-      if (result != VK_SUCCESS)
-         throw std::runtime_error(fmt::format("Failed to create staging buffer. {}", string_VkResult(result)));
-
-#ifdef YX_DEBUG
-      const VkDebugMarkerObjectNameInfoEXT debugMarker =
-      {
-         .sType = VK_STRUCTURE_TYPE_DEBUG_MARKER_OBJECT_NAME_INFO_EXT,
-         .pNext = nullptr,
-         .objectType = VkDebugReportObjectTypeEXT::VK_DEBUG_REPORT_OBJECT_TYPE_BUFFER_EXT,
-         .object = reinterpret_cast<uint64_t>(m_stagingBuffer),
-         .pObjectName = "MEM_MGR_STAGING_BUFFER"
-      };
-
-      result = vkDebugMarkerSetObjectNameEXT(device->getLogicalDevice(), &debugMarker);
-      if (result != VK_SUCCESS)
-         YX_CORE_LOGGER->warn("Failed to set debug name for Memory Manager Staging Buffer. {}", string_VkResult(result));
-#endif
    }
 }
 
@@ -166,57 +152,12 @@ VkImage DeviceMemoryManager::createImage(const VkImageCreateInfo& createInfo)
    return image;
 }
 
-void DeviceMemoryManager::copyAssetToBuffer(const void* asset, VkBuffer buffer, std::optional<VkDeviceSize> size)
+void DeviceMemoryManager::copyToBuffer(const void* asset, VkBuffer buffer, std::optional<VkDeviceSize> size)
 {
-   VkDevice logicalDevice = m_device->getLogicalDevice();
-   VkDeviceMemory stagingBufferMemory = m_stagingBufferMemory->GetMemory();
-   ResourceKey key = std::make_pair(reinterpret_cast<uintptr_t>(buffer), ResourceType::BUFFER);
-   auto& allocation = m_allocations[key];
-   
-   if (not size.has_value())
-      size = allocation->GetSize();
 
-   void* mappedBuffer;
-   VkDeviceSize offset = 0;
-   while (offset < size.value())
-   {
-      VkDeviceSize sizeToCopy = STAGING_BUFFER_SIZE < size.value() ? STAGING_BUFFER_SIZE : size.value();
-      vkMapMemory(logicalDevice, stagingBufferMemory, 0, STAGING_BUFFER_SIZE, 0, &mappedBuffer);
-      std::memcpy(mappedBuffer, asset, sizeToCopy);
-      executeTransferBuffer(buffer, VkBufferCopy{ 0, offset, sizeToCopy });
-      offset += sizeToCopy;
-      size = size.value() - sizeToCopy;
-   }
-
-   vkUnmapMemory(logicalDevice, stagingBufferMemory);
 }
 
-void DeviceMemoryManager::executeTransferBuffer(VkBuffer buffer, const VkBufferCopy memRegion)
-{
-   VkDevice logicalDevice = m_device->getLogicalDevice();
-   vkResetCommandBuffer(m_transferCommandBuffer, 0);
-   vkCmdCopyBuffer(m_transferCommandBuffer, m_stagingBuffer, buffer, 1, &memRegion);
-   vkEndCommandBuffer(m_transferCommandBuffer);
-
-   const VkCommandBufferSubmitInfo commandBufferSubmitInfo{ VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO, nullptr, m_transferCommandBuffer, 0 };
-   VkSubmitInfo2 submitInfo =
-   {
-      .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
-      .pNext = nullptr,
-      .flags = 0,
-      .waitSemaphoreInfoCount = 0,
-      .pWaitSemaphoreInfos = nullptr,
-      .commandBufferInfoCount = 1,
-      .pCommandBufferInfos = &commandBufferSubmitInfo,
-      .signalSemaphoreInfoCount = 0,
-      .pSignalSemaphoreInfos = nullptr
-   };
-   vkQueueSubmit2(m_device->getQueue(Device::QueueType::TRANSFER), 1, &submitInfo, m_transferFence);
-   vkWaitForFences(logicalDevice, 1, &m_transferFence, VK_TRUE, 0);
-   vkResetFences(logicalDevice, 1, &m_transferFence);
-}
-
-void DeviceMemoryManager::copyAssetToBuffer(const void* asset, VkImage image, std::optional<VkDeviceSize> size)
+void DeviceMemoryManager::copyToImage(const void* asset, VkImage image, std::optional<VkDeviceSize> size)
 {
 
 }
@@ -238,10 +179,9 @@ void DeviceMemoryManager::deleteAsset(VkImage image)
 DeviceMemoryManager::~DeviceMemoryManager()
 {
    VkDevice logicalDevice = m_device->getLogicalDevice();
-   vkDestroyFence(logicalDevice, m_transferFence, nullptr);
    vkFreeCommandBuffers(logicalDevice, m_transferQueueCommandPool, 1, &m_transferCommandBuffer);
    vkDestroyCommandPool(logicalDevice , m_transferQueueCommandPool, nullptr);
-   vmaDestroyBuffer(m_allocator, m_stagingBuffer, m_stagingBufferMemory);
+   vmaDestroyBuffer(m_allocator, m_stagingBuffer.buffer, m_stagingBuffer.allocation);
    if (m_allocations.size() > 0)
    {
       for (const auto& [resourceKey, allocation] : m_allocations)
