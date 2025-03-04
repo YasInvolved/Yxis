@@ -36,6 +36,8 @@ namespace Yxis::Vulkan
       DeviceMemoryManager(const Device* device);
       VkBuffer createBuffer(const VkBufferCreateInfo& createInfo);
       VkImage createImage(const VkImageCreateInfo& createInfo);
+      void copyAssetToBuffer(const void* asset, VkBuffer buffer, std::optional<VkDeviceSize> size = {});
+      void copyAssetToBuffer(const void* asset, VkImage image, std::optional<VkDeviceSize> size = {});
       void deleteAsset(VkBuffer buffer);
       void deleteAsset(VkImage image);
       ~DeviceMemoryManager();
@@ -45,8 +47,13 @@ namespace Yxis::Vulkan
       VmaAllocator m_allocator = nullptr;
       std::unordered_map<ResourceKey, VmaAllocation, ResourceKeyHash, ResourceKeyEqual> m_allocations;
 
+      void executeTransferBuffer(VkBuffer buffer, const VkBufferCopy memRegion);
+
       // staging buffer
       VkBuffer m_stagingBuffer;
       VmaAllocation m_stagingBufferMemory;
+      VkFence m_transferFence;
+      VkCommandPool m_transferQueueCommandPool;
+      VkCommandBuffer m_transferCommandBuffer;
    };
 }

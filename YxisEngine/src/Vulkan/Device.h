@@ -18,6 +18,7 @@ namespace Yxis::Vulkan
    class Device
    {
    public:
+      enum class QueueType { GRAPHICS, COMPUTE, TRANSFER, SPARSE_BINDING, OPTICAL_FLOW, VIDEO_DECODE, VIDEO_ENCODE };
       Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndices);
       ~Device();
 
@@ -30,9 +31,11 @@ namespace Yxis::Vulkan
       const std::vector<VkSurfaceFormat2KHR> getSurfaceFormats() const;
       const std::vector<VkPresentModeKHR> getPresentModes() const;
       const QueueFamilyIndices& getQueueFamilyIndices() const;
+      const VkQueue getQueue(QueueType type) const;
    private:
       VkDevice m_device;
       VkPhysicalDevice m_physicalDevice;
+      VkCommandPool m_commandPool;
 
       std::unique_ptr<Swapchain> m_swapchain;
       std::unique_ptr<DeviceMemoryManager> m_memoryManager;

@@ -20,6 +20,7 @@ Device::Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndice
    constexpr const char* deviceEnabledLayers[] = { nullptr }; // unintialized yet
    constexpr const char* deviceEnabledExtensions[] = { 
       VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+      VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
 #ifdef YX_DEBUG
       VK_EXT_DEBUG_MARKER_EXTENSION_NAME
 #endif
@@ -151,6 +152,27 @@ const std::vector<VkPresentModeKHR> Device::getPresentModes() const
 const QueueFamilyIndices& Device::getQueueFamilyIndices() const
 {
    return m_queueFamilies;
+}
+
+const VkQueue Device::getQueue(Device::QueueType type) const
+{
+   switch (type)
+   {
+   case QueueType::GRAPHICS:
+      return m_queues.graphicsQueue;
+      break;
+   case QueueType::COMPUTE:
+      return m_queues.computeQueue;
+      break;
+   case QueueType::TRANSFER:
+      return m_queues.transferQueue;
+      break;
+   default:
+      YX_CORE_LOGGER->warn("Requested queue type is not supported yet");
+      break;
+   }
+
+   return VK_NULL_HANDLE;
 }
 
 Device::~Device()
