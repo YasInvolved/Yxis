@@ -9,7 +9,7 @@
 
 using namespace Yxis::Vulkan;
 
-static constexpr uint32_t STAGING_BUFFER_SIZE = 100 * 1024 * 1024;
+static constexpr uint32_t STAGING_BUFFER_SIZE = 100 * 1024 * 1024; // 100mb
 constexpr VmaAllocationCreateInfo STAGING_BUFFER_ALLOC_CREATE_INFO =
 {
    .usage = VMA_MEMORY_USAGE_AUTO,
@@ -30,7 +30,7 @@ DeviceMemoryManager::DeviceMemoryManager(const Device* device)
 
    VmaAllocatorCreateInfo allocatorCreateInfo =
    {
-      .flags = VMA_ALLOCATOR_CREATE_KHR_MAINTENANCE5_BIT,
+      .flags = 0,
       .physicalDevice = physicalDevice,
       .device = m_device->getLogicalDevice(),
       .pVulkanFunctions = &vulkanFunctions,

@@ -20,7 +20,6 @@ Device::Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndice
    constexpr const char* deviceEnabledLayers[] = { nullptr }; // unintialized yet
    constexpr const char* deviceEnabledExtensions[] = { 
       VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-      VK_KHR_MAINTENANCE_5_EXTENSION_NAME,
 #ifdef YX_DEBUG
       VK_EXT_DEBUG_MARKER_EXTENSION_NAME
 #endif

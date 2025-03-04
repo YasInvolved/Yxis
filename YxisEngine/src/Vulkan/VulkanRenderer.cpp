@@ -68,12 +68,12 @@ void VulkanRenderer::initialize(const std::string& appName)
       auto instanceExtensions = Window::getRequiredInstanceExtensions();
 #ifdef YX_DEBUG
       instanceExtensions.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
-      constexpr const char* INSTANCE_ENABLED_LAYERS[] = { "VK_LAYER_KHRONOS_validation" };
+      instanceExtensions.emplace_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+      constexpr std::array<const char*, 1> INSTANCE_ENABLED_LAYERS = { "VK_LAYER_KHRONOS_validation" };
 #else
-      constexpr const char* INSTANCE_ENABLED_LAYERS = {  };
+      constexpr std::array<const char*, 0> INSTANCE_ENABLED_LAYERS = {};
 #endif
       instanceExtensions.emplace_back("VK_KHR_get_surface_capabilities2");
-      instanceExtensions.emplace_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
 
       const VkApplicationInfo appInfo =
       {
@@ -96,8 +96,8 @@ void VulkanRenderer::initialize(const std::string& appName)
 #endif
          .flags = 0,
          .pApplicationInfo = &appInfo,
-         .enabledLayerCount = static_cast<uint32_t>(std::size(INSTANCE_ENABLED_LAYERS)),
-         .ppEnabledLayerNames = INSTANCE_ENABLED_LAYERS,
+         .enabledLayerCount = static_cast<uint32_t>(INSTANCE_ENABLED_LAYERS.size()),
+         .ppEnabledLayerNames = INSTANCE_ENABLED_LAYERS.data(),
          .enabledExtensionCount = static_cast<uint32_t>(instanceExtensions.size()),
          .ppEnabledExtensionNames = instanceExtensions.data(),
       };
