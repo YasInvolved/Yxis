@@ -175,6 +175,28 @@ const VkQueue Device::getQueue(Device::QueueType type) const
    return VK_NULL_HANDLE;
 }
 
+const VkFence Device::createFence(bool signaled) const
+{
+   VkFence fence;
+   const VkFenceCreateInfo createInfo{ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, nullptr, signaled ? VK_FENCE_CREATE_SIGNALED_BIT : 0 };
+   VkResult result = vkCreateFence(m_device, &createInfo, nullptr, &fence);
+   if (result != VK_SUCCESS)
+      throw std::runtime_error(fmt::format("Failed to create a fence. {}", string_VkResult(result)));
+
+   return fence;
+}
+
+const VkSemaphore Device::craeteSemaphore() const
+{
+   VkSemaphore semaphore;
+   const VkSemaphoreCreateInfo createInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, nullptr, 0 };
+   VkResult result = vkCreateSemaphore(m_device, &createInfo, nullptr, &semaphore);
+   if (result != VK_SUCCESS)
+      throw std::runtime_error(fmt::format("Failed to create a semaphore. {}", string_VkResult(result)));
+
+   return semaphore;
+}
+
 Device::~Device()
 {
    m_memoryManager.reset();

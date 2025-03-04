@@ -32,6 +32,8 @@ namespace Yxis::Vulkan
       const std::vector<VkPresentModeKHR> getPresentModes() const;
       const QueueFamilyIndices& getQueueFamilyIndices() const;
       const VkQueue getQueue(QueueType type) const;
+      const VkFence createFence(bool signaled) const;
+      const VkSemaphore craeteSemaphore() const;
    private:
       VkDevice m_device;
       VkPhysicalDevice m_physicalDevice;
