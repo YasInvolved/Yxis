@@ -49,20 +49,24 @@ namespace Yxis::Vulkan
 
       class StagingBuffer 
       {
-      protected:
-         StagingBuffer(DeviceMemoryManager& memoryManager, VkDeviceSize size);
+      public:
+         StagingBuffer(DeviceMemoryManager* memoryManager, VkDeviceSize size);
          ~StagingBuffer();
-
+      
+      protected:
          void copyToBuffer();
          void copyToImage();
 
       private:
-         DeviceMemoryManager& m_memoryManager;
+         VkDeviceSize m_size;
+         DeviceMemoryManager* m_memoryManager;
          std::atomic<VkDeviceSize> head = 0, tail = 0;
          void* m_memPtr;
          VmaAllocation m_sbAllocation;
          VkBuffer m_stagingBuffer;
          std::array<VkCommandBuffer, 1> m_transferCommandBuffers;
       };
+
+      std::unique_ptr<StagingBuffer> m_stagingBuffer;
    };
 }

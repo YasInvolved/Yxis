@@ -38,53 +38,7 @@ DeviceMemoryManager::DeviceMemoryManager(const Device* device)
    if (result != VK_SUCCESS)
       throw std::runtime_error(fmt::format("Failed to create device memory allocator. {}", string_VkResult(result)));
 
-   {
-      const VkCommandPoolCreateInfo createInfo =
-      {
-         .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-         .pNext = nullptr,
-         .flags = 0,
-         .queueFamilyIndex = m_device->getQueueFamilyIndices().transferIndex.value()
-      };
-
-      result = vkCreateCommandPool(logicalDevice, &createInfo, nullptr, &m_transferQueueCommandPool);
-      if (result != VK_SUCCESS)
-         throw std::runtime_error(fmt::format("Failed to create transfer command pool. {}", string_VkResult(result)));
-
-      const VkCommandBufferAllocateInfo allocateInfo =
-      {
-         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-         .pNext = nullptr,
-         .commandPool = m_transferQueueCommandPool,
-         .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-         .commandBufferCount = 1,
-      };
-
-      result = vkAllocateCommandBuffers(logicalDevice, &allocateInfo, &m_transferCommandBuffer);
-      if (result != VK_SUCCESS)
-         throw std::runtime_error(fmt::format("Failed to allocate transfer command buffer. {}", string_VkResult(result)));
-
-      const VkCommandBufferInheritanceInfo inheritanceInfo =
-      {
-         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
-         .renderPass = VK_NULL_HANDLE,
-         .subpass = 0,
-         .framebuffer = VK_NULL_HANDLE,
-         .occlusionQueryEnable = VK_FALSE,
-         .queryFlags = 0,
-         .pipelineStatistics = 0
-      };
-
-      const VkCommandBufferBeginInfo beginInfo =
-      {
-         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-         .pNext = nullptr,
-         .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-         .pInheritanceInfo = &inheritanceInfo
-      };
-
-      vkBeginCommandBuffer(m_transferCommandBuffer, &beginInfo);
-   }
+   m_stagingBuffer = std::make_unique<StagingBuffer>(this, s_stagingBufferSize);
 }
 
 VkBuffer DeviceMemoryManager::createBuffer(const VkBufferCreateInfo& createInfo)
@@ -150,8 +104,8 @@ void DeviceMemoryManager::deleteAsset(VkImage image)
 }
 
 // STAGING BUFFER
-DeviceMemoryManager::StagingBuffer::StagingBuffer(DeviceMemoryManager& memoryManager, VkDeviceSize size)
-   : m_memoryManager(memoryManager)
+DeviceMemoryManager::StagingBuffer::StagingBuffer(DeviceMemoryManager* memoryManager, VkDeviceSize size)
+   : m_memoryManager(memoryManager), m_size(size)
 {
    const VkBufferCreateInfo createInfo =
    {
@@ -162,7 +116,7 @@ DeviceMemoryManager::StagingBuffer::StagingBuffer(DeviceMemoryManager& memoryMan
       .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
       .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
       .queueFamilyIndexCount = 1,
-      .pQueueFamilyIndices = &memoryManager.m_device->getQueueFamilyIndices().transferIndex.value(),
+      .pQueueFamilyIndices = &m_memoryManager->m_device->getQueueFamilyIndices().transferIndex.value(),
    };
 
    constexpr VmaAllocationCreateInfo allocCreateInfo =
@@ -173,12 +127,12 @@ DeviceMemoryManager::StagingBuffer::StagingBuffer(DeviceMemoryManager& memoryMan
    };
 
    VmaAllocationInfo allocInfo;
-   VkResult result = vmaCreateBuffer(memoryManager.m_allocator, &createInfo, &allocCreateInfo, &m_stagingBuffer, &m_sbAllocation, &allocInfo);
+   VkResult result = vmaCreateBuffer(m_memoryManager->m_allocator, &createInfo, &allocCreateInfo, &m_stagingBuffer, &m_sbAllocation, &allocInfo);
    if (result != VK_SUCCESS)
       throw std::runtime_error(fmt::format("Failed to create staging buffer. {}", string_VkResult(result)));
 
    m_memPtr = allocInfo.pMappedData;
-   m_transferCommandBuffers = memoryManager.m_device->allocateCommandBuffers<1>(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+   m_transferCommandBuffers = m_memoryManager->m_device->allocateCommandBuffers<1>(Device::QueueType::TRANSFER, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
 }
 
 void DeviceMemoryManager::StagingBuffer::copyToBuffer()
@@ -193,12 +147,13 @@ void DeviceMemoryManager::StagingBuffer::copyToImage()
 
 DeviceMemoryManager::StagingBuffer::~StagingBuffer()
 {
-   vmaDestroyBuffer(m_memoryManager.m_allocator, m_stagingBuffer, m_sbAllocation);
-   m_memoryManager.m_device->freeCommandBuffers(m_transferCommandBuffers);
+   vmaDestroyBuffer(m_memoryManager->m_allocator, m_stagingBuffer, m_sbAllocation);
+   m_memoryManager->m_device->freeCommandBuffers(Device::QueueType::TRANSFER, m_transferCommandBuffers);
 }
 
 DeviceMemoryManager::~DeviceMemoryManager()
 {
+   m_stagingBuffer.reset();
    VkDevice logicalDevice = m_device->getLogicalDevice();
    if (m_allocations.size() > 0)
    {

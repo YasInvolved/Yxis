@@ -64,23 +64,25 @@ Device::Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndice
       vkGetDeviceQueue2(m_device, &queueInfo, &m_queues.transferQueue);
    }
 
+   {
+      VkCommandPoolCreateInfo commandPoolCreateInfo{ VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, nullptr, 0, m_queueFamilies.gfxIndex };
+      result = vkCreateCommandPool(m_device, &commandPoolCreateInfo, nullptr, &m_commandPools.gfxCommandPool);
+      if (result != VK_SUCCESS)
+         throw std::runtime_error(fmt::format("Failed to create a graphics command pool. {}", string_VkResult(result)));
+
+      commandPoolCreateInfo.queueFamilyIndex = m_queueFamilies.computeIndex.value();
+      result = vkCreateCommandPool(m_device, &commandPoolCreateInfo, nullptr, &m_commandPools.computeCommandPool);
+      if (result != VK_SUCCESS)
+         throw std::runtime_error(fmt::format("Failed to create a compute command pool. {}", string_VkResult(result)));
+
+      commandPoolCreateInfo.queueFamilyIndex = m_queueFamilies.transferIndex.value();
+      result = vkCreateCommandPool(m_device, &commandPoolCreateInfo, nullptr, &m_commandPools.transferCommandPool);
+      if (result != VK_SUCCESS)
+         throw std::runtime_error(fmt::format("Failed to create a transfer command pool. {}", string_VkResult(result)));
+   }
+
    m_swapchain = std::make_unique<Swapchain>(this);
    m_memoryManager = std::make_unique<DeviceMemoryManager>(this);
-
-   // testing memory manager (TODO: Remove)
-   constexpr VkBufferCreateInfo testBuffer =
-   {
-      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-      .pNext = nullptr,
-      .flags = 0,
-      .size = 1024 * 1024,
-      .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-      .queueFamilyIndexCount = 0,
-      .pQueueFamilyIndices = nullptr,
-   };
-
-   VkBuffer buffer = m_memoryManager->createBuffer(testBuffer);
 }
 
 const VkDevice Device::getLogicalDevice() const
@@ -175,15 +177,34 @@ const VkQueue Device::getQueue(Device::QueueType type) const
    return VK_NULL_HANDLE;
 }
 
-void Device::freeCommandBuffers(const std::span<VkCommandBuffer> commandBuffers) const
+const VkCommandPool Device::getCommandPoolForQueueType(Device::QueueType type) const
 {
-   vkFreeCommandBuffers(m_device, m_commandPool, static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
+   switch (type)
+   {
+   case QueueType::GRAPHICS:
+      return m_commandPools.gfxCommandPool;
+      break;
+   case QueueType::COMPUTE:
+      return m_commandPools.computeCommandPool;
+      break;
+   case QueueType::TRANSFER:
+      return m_commandPools.transferCommandPool;
+      break;
+   default:
+      return VK_NULL_HANDLE;
+      break;
+   }
+}
+
+void Device::freeCommandBuffers(Device::QueueType type, const std::span<VkCommandBuffer> commandBuffers) const
+{
+   vkFreeCommandBuffers(m_device, getCommandPoolForQueueType(type), static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
 }
 
 const VkFence Device::createFence(bool signaled) const
 {
    VkFence fence;
-   const VkFenceCreateInfo createInfo{ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, nullptr, signaled ? VK_FENCE_CREATE_SIGNALED_BIT : 0 };
+   const VkFenceCreateInfo createInfo{ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, nullptr, signaled ? VK_FENCE_CREATE_SIGNALED_BIT : static_cast<VkFenceCreateFlags>(0) };
    VkResult result = vkCreateFence(m_device, &createInfo, nullptr, &fence);
    if (result != VK_SUCCESS)
       throw std::runtime_error(fmt::format("Failed to create a fence. {}", string_VkResult(result)));
@@ -233,6 +254,9 @@ Device::~Device()
 {
    m_memoryManager.reset();
    m_swapchain.reset();
+   vkDestroyCommandPool(m_device, m_commandPools.gfxCommandPool, nullptr);
+   vkDestroyCommandPool(m_device, m_commandPools.computeCommandPool, nullptr);
+   vkDestroyCommandPool(m_device, m_commandPools.transferCommandPool, nullptr);
    if (m_device != VK_NULL_HANDLE)
       vkDestroyDevice(m_device, nullptr);
 }

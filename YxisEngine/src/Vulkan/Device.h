@@ -34,16 +34,19 @@ namespace Yxis::Vulkan
       // queues
       const QueueFamilyIndices& getQueueFamilyIndices() const;
       const VkQueue getQueue(QueueType type) const;
+      const VkCommandPool getCommandPoolForQueueType(QueueType type) const;
 
       template <uint32_t count>
-      const std::array<VkCommandBuffer, count> allocateCommandBuffers(const VkCommandBufferLevel level) const
+      const std::array<VkCommandBuffer, count> allocateCommandBuffers(QueueType queueType, const VkCommandBufferLevel level) const
       {
+         VkCommandPool commandPool = getCommandPoolForQueueType(queueType);
+         assert(commandPool != VK_NULL_HANDLE && "commandPool is null");
          std::array<VkCommandBuffer, count> commandBuffers;
          const VkCommandBufferAllocateInfo allocateInfo =
          {
             .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
             .pNext = nullptr,
-            .commandPool = m_commandPool,
+            .commandPool = commandPool,
             .level = level,
             .commandBufferCount = count
          };
@@ -55,7 +58,7 @@ namespace Yxis::Vulkan
          return commandBuffers;
       }
 
-      void freeCommandBuffers(const std::span<VkCommandBuffer> commandBuffers) const;
+      void freeCommandBuffers(Device::QueueType type, const std::span<VkCommandBuffer> commandBuffers) const;
 
       // synchronization
       const VkFence createFence(bool signaled) const;
@@ -66,7 +69,12 @@ namespace Yxis::Vulkan
    private:
       VkDevice m_device;
       VkPhysicalDevice m_physicalDevice;
-      VkCommandPool m_commandPool;
+
+      struct {
+         VkCommandPool gfxCommandPool;
+         VkCommandPool computeCommandPool;
+         VkCommandPool transferCommandPool;
+      } m_commandPools;
 
       std::unique_ptr<Swapchain> m_swapchain;
       std::unique_ptr<DeviceMemoryManager> m_memoryManager;
