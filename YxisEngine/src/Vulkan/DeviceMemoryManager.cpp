@@ -9,6 +9,8 @@
 
 using namespace Yxis::Vulkan;
 
+static constexpr VkDeviceSize s_stagingBufferSize = 256 * 1024 * 1024; // 256mb
+
 DeviceMemoryManager::DeviceMemoryManager(const Device* device)
    : m_device(device)
 {
@@ -35,35 +37,6 @@ DeviceMemoryManager::DeviceMemoryManager(const Device* device)
    VkResult result = vmaCreateAllocator(&allocatorCreateInfo, &m_allocator);
    if (result != VK_SUCCESS)
       throw std::runtime_error(fmt::format("Failed to create device memory allocator. {}", string_VkResult(result)));
-
-   {
-      constexpr VkDeviceSize STAGING_BUFFER_SIZE = 256 * 1024 * 1024; // 256mb
-      constexpr VmaAllocationCreateInfo allocCreateInfo =
-      {
-         .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
-         .usage = VMA_MEMORY_USAGE_AUTO,
-         .requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-      };
-      
-      const VkBufferCreateInfo createInfo =
-      {
-         .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-         .pNext = nullptr,
-         .flags = 0,
-         .size = STAGING_BUFFER_SIZE,
-         .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-         .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-         .queueFamilyIndexCount = 1,
-         .pQueueFamilyIndices = &m_device->getQueueFamilyIndices().transferIndex.value(),
-      };
-     
-      VmaAllocationInfo allocInfo;
-      result = vmaCreateBuffer(m_allocator, &createInfo, &allocCreateInfo, &m_stagingBuffer.buffer, &m_stagingBuffer.allocation, &allocInfo);
-      if (result != VK_SUCCESS)
-         throw std::runtime_error(fmt::format("Failed to create staging buffer. {}", string_VkResult(result)));
-
-      m_stagingBuffer.mappedMemory = allocInfo.pMappedData;
-   }
 
    {
       const VkCommandPoolCreateInfo createInfo =
@@ -176,12 +149,57 @@ void DeviceMemoryManager::deleteAsset(VkImage image)
    vmaDestroyImage(m_allocator, image, allocation);
 }
 
+// STAGING BUFFER
+DeviceMemoryManager::StagingBuffer::StagingBuffer(DeviceMemoryManager& memoryManager, VkDeviceSize size)
+   : m_memoryManager(memoryManager)
+{
+   const VkBufferCreateInfo createInfo =
+   {
+      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+      .pNext = nullptr,
+      .flags = 0,
+      .size = size,
+      .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
+      .queueFamilyIndexCount = 1,
+      .pQueueFamilyIndices = &memoryManager.m_device->getQueueFamilyIndices().transferIndex.value(),
+   };
+
+   constexpr VmaAllocationCreateInfo allocCreateInfo =
+   {
+      .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_RANDOM_BIT,
+      .usage = VMA_MEMORY_USAGE_AUTO,
+      .requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+   };
+
+   VmaAllocationInfo allocInfo;
+   VkResult result = vmaCreateBuffer(memoryManager.m_allocator, &createInfo, &allocCreateInfo, &m_stagingBuffer, &m_sbAllocation, &allocInfo);
+   if (result != VK_SUCCESS)
+      throw std::runtime_error(fmt::format("Failed to create staging buffer. {}", string_VkResult(result)));
+
+   m_memPtr = allocInfo.pMappedData;
+   m_transferCommandBuffers = memoryManager.m_device->allocateCommandBuffers<1>(VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+}
+
+void DeviceMemoryManager::StagingBuffer::copyToBuffer()
+{
+
+}
+
+void DeviceMemoryManager::StagingBuffer::copyToImage()
+{
+
+}
+
+DeviceMemoryManager::StagingBuffer::~StagingBuffer()
+{
+   vmaDestroyBuffer(m_memoryManager.m_allocator, m_stagingBuffer, m_sbAllocation);
+   m_memoryManager.m_device->freeCommandBuffers(m_transferCommandBuffers);
+}
+
 DeviceMemoryManager::~DeviceMemoryManager()
 {
    VkDevice logicalDevice = m_device->getLogicalDevice();
-   vkFreeCommandBuffers(logicalDevice, m_transferQueueCommandPool, 1, &m_transferCommandBuffer);
-   vkDestroyCommandPool(logicalDevice , m_transferQueueCommandPool, nullptr);
-   vmaDestroyBuffer(m_allocator, m_stagingBuffer.buffer, m_stagingBuffer.allocation);
    if (m_allocations.size() > 0)
    {
       for (const auto& [resourceKey, allocation] : m_allocations)

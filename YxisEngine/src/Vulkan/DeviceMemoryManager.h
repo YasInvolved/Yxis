@@ -47,13 +47,22 @@ namespace Yxis::Vulkan
       VmaAllocator m_allocator = nullptr;
       std::unordered_map<ResourceKey, VmaAllocation, ResourceKeyHash, ResourceKeyEqual> m_allocations;
 
-      struct {
-         void* mappedMemory;
-         VkBuffer buffer;
-         VmaAllocation allocation;
-      } m_stagingBuffer;
+      class StagingBuffer 
+      {
+      protected:
+         StagingBuffer(DeviceMemoryManager& memoryManager, VkDeviceSize size);
+         ~StagingBuffer();
 
-      VkCommandPool m_transferQueueCommandPool;
-      VkCommandBuffer m_transferCommandBuffer;
+         void copyToBuffer();
+         void copyToImage();
+
+      private:
+         DeviceMemoryManager& m_memoryManager;
+         std::atomic<VkDeviceSize> head = 0, tail = 0;
+         void* m_memPtr;
+         VmaAllocation m_sbAllocation;
+         VkBuffer m_stagingBuffer;
+         std::array<VkCommandBuffer, 1> m_transferCommandBuffers;
+      };
    };
 }
