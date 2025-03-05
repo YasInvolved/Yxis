@@ -1,6 +1,7 @@
 #include "Device.h"
 #include <Yxis/Logger.h>
 #include "../Window.h"
+#include "VulkanUtilities.h"
 
 using namespace Yxis::Vulkan;
 
@@ -17,7 +18,7 @@ Device::Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndice
    if (m_queueFamilies.transferIndex.has_value())
       queueCreateInfos.emplace_back(VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO, nullptr, 0, m_queueFamilies.transferIndex.value(), 1, &queuePriority);
 
-   constexpr const char* deviceEnabledLayers[] = { nullptr }; // unintialized yet
+   constexpr std::array<const char*, 0> deviceEnabledLayers = {};
    constexpr const char* deviceEnabledExtensions[] = { 
       VK_KHR_SWAPCHAIN_EXTENSION_NAME,
       VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
@@ -26,6 +27,7 @@ Device::Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndice
 #endif
    };
 
+   auto features = Utils::getDeviceFeatures(m_physicalDevice);
    VkDeviceCreateInfo deviceCreateInfo =
    {
       .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -33,10 +35,11 @@ Device::Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndice
       .flags = 0,
       .queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size()),
       .pQueueCreateInfos = queueCreateInfos.data(),
-      .enabledLayerCount = 0,
-      .ppEnabledLayerNames = nullptr,
+      .enabledLayerCount = static_cast<uint32_t>(deviceEnabledLayers.size()),
+      .ppEnabledLayerNames = deviceEnabledLayers.data(),
       .enabledExtensionCount = static_cast<uint32_t>(std::size(deviceEnabledExtensions)),
       .ppEnabledExtensionNames = deviceEnabledExtensions,
+      .pEnabledFeatures = &features.features,
    };
 
    VkResult result = vkCreateDevice(m_physicalDevice, &deviceCreateInfo, nullptr, &m_device);
