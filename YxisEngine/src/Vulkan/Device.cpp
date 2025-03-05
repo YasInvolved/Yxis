@@ -27,11 +27,22 @@ Device::Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndice
 #endif
    };
 
-   auto features = Utils::getDeviceFeatures(m_physicalDevice);
+   
+   VkPhysicalDeviceFeatures2 features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+
+   // link structures (vk14 -> vk13 -> vk12 -> vk11)
+   VkPhysicalDeviceVulkan11Features vulkan11Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
+   VkPhysicalDeviceVulkan12Features vulkan12Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, &vulkan11Features };
+   VkPhysicalDeviceVulkan13Features vulkan13Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES, &vulkan12Features };
+   VkPhysicalDeviceVulkan14Features vulkan14Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES, &vulkan13Features };
+   features.pNext = &vulkan14Features;
+
+   vkGetPhysicalDeviceFeatures2(physicalDevice, &features);
+
    VkDeviceCreateInfo deviceCreateInfo =
    {
       .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-      .pNext = nullptr,
+      .pNext = &features,
       .flags = 0,
       .queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size()),
       .pQueueCreateInfos = queueCreateInfos.data(),
@@ -39,7 +50,6 @@ Device::Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndice
       .ppEnabledLayerNames = deviceEnabledLayers.data(),
       .enabledExtensionCount = static_cast<uint32_t>(std::size(deviceEnabledExtensions)),
       .ppEnabledExtensionNames = deviceEnabledExtensions,
-      .pEnabledFeatures = &features.features,
    };
 
    VkResult result = vkCreateDevice(m_physicalDevice, &deviceCreateInfo, nullptr, &m_device);
