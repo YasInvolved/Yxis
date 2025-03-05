@@ -175,6 +175,11 @@ const VkQueue Device::getQueue(Device::QueueType type) const
    return VK_NULL_HANDLE;
 }
 
+void Device::freeCommandBuffers(const std::span<VkCommandBuffer> commandBuffers) const
+{
+   vkFreeCommandBuffers(m_device, m_commandPool, static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
+}
+
 const VkFence Device::createFence(bool signaled) const
 {
    VkFence fence;
@@ -195,6 +200,33 @@ const VkSemaphore Device::craeteSemaphore() const
       throw std::runtime_error(fmt::format("Failed to create a semaphore. {}", string_VkResult(result)));
 
    return semaphore;
+}
+
+const VkSemaphore Device::createTimelineSemaphore(uint64_t initialValue) const
+{
+   VkSemaphore semaphore;
+   const VkSemaphoreTypeCreateInfo typeInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO, nullptr, VK_SEMAPHORE_TYPE_TIMELINE, initialValue };
+   const VkSemaphoreCreateInfo createInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, &typeInfo, 0 };
+   VkResult result = vkCreateSemaphore(m_device, &createInfo, nullptr, &semaphore);
+   if (result != VK_SUCCESS)
+      throw std::runtime_error(fmt::format("Failed to create a timeline semaphore. {}", string_VkResult(result)));
+
+   return semaphore;
+}
+
+void Device::signalTimelineSemaphore(VkSemaphore semaphore, uint64_t newValue) const
+{
+   const VkSemaphoreSignalInfo signalInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO, nullptr, semaphore, newValue };
+   VkResult result = vkSignalSemaphore(m_device, &signalInfo);
+   if (result != VK_SUCCESS)
+      throw std::runtime_error(fmt::format("Failed to signal a timeline semaphore. {}", string_VkResult(result)));
+}
+
+inline bool Device::checkTimelineSemaphoreCompletion(VkSemaphore semaphore, uint64_t expectedValue) const
+{
+   uint64_t currentValue;
+   vkGetSemaphoreCounterValue(m_device, semaphore, &currentValue);
+   return currentValue == expectedValue;
 }
 
 Device::~Device()

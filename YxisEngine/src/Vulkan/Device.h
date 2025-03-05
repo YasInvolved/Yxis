@@ -30,10 +30,39 @@ namespace Yxis::Vulkan
       const VkSurfaceCapabilities2KHR getSurfaceCapabilities() const;
       const std::vector<VkSurfaceFormat2KHR> getSurfaceFormats() const;
       const std::vector<VkPresentModeKHR> getPresentModes() const;
+
+      // queues
       const QueueFamilyIndices& getQueueFamilyIndices() const;
       const VkQueue getQueue(QueueType type) const;
+
+      template <uint32_t count>
+      const std::array<VkCommandBuffer, count> allocateCommandBuffers(const VkCommandBufferLevel level) const
+      {
+         std::array<VkCommandBuffer, count> commandBuffers;
+         const VkCommandBufferAllocateInfo allocateInfo =
+         {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .pNext = nullptr,
+            .commandPool = m_commandPool,
+            .level = level,
+            .commandBufferCount = count
+         };
+
+         VkResult result = vkAllocateCommandBuffers(m_device, &allocateInfo, commandBuffers.data());
+         if (result != VK_SUCCESS)
+            throw std::runtime_error(fmt::format("Failed to create {} command buffers. {}", count, string_VkResult(result)));
+
+         return commandBuffers;
+      }
+
+      void freeCommandBuffers(const std::span<VkCommandBuffer> commandBuffers) const;
+
+      // synchronization
       const VkFence createFence(bool signaled) const;
       const VkSemaphore craeteSemaphore() const;
+      const VkSemaphore createTimelineSemaphore(uint64_t initialValue) const;
+      void signalTimelineSemaphore(VkSemaphore semaphore, uint64_t newValue) const;
+      inline bool checkTimelineSemaphoreCompletion(VkSemaphore semaphore, uint64_t expectedValue) const;
    private:
       VkDevice m_device;
       VkPhysicalDevice m_physicalDevice;
