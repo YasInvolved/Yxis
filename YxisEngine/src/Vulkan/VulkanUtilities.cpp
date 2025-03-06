@@ -2,22 +2,6 @@
 
 namespace Yxis::Vulkan::Utils
 {
-   VkPhysicalDeviceFeatures2 getDeviceFeatures(VkPhysicalDevice physicalDevice) noexcept
-   {
-      VkPhysicalDeviceFeatures2 features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
-
-      // link structures (vk14 -> vk13 -> vk12 -> vk11)
-      VkPhysicalDeviceVulkan11Features vulkan11Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
-      VkPhysicalDeviceVulkan12Features vulkan12Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES, &vulkan11Features };
-      VkPhysicalDeviceVulkan13Features vulkan13Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES, &vulkan12Features };
-      VkPhysicalDeviceVulkan14Features vulkan14Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES, &vulkan13Features };
-      features.pNext = &vulkan14Features;
-
-      vkGetPhysicalDeviceFeatures2(physicalDevice, &features);
-
-      return features;
-   }
-
    VkPhysicalDeviceProperties2 getDeviceProperties(VkPhysicalDevice physicalDevice) noexcept
    {
       VkPhysicalDeviceProperties2 properties{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
