@@ -147,11 +147,9 @@ DeviceMemoryManager::StagingBuffer::StagingBuffer(DeviceMemoryManager* memoryMan
 void DeviceMemoryManager::StagingBuffer::copyToBuffer(const void* data, VkBuffer buffer, VkDeviceSize size)
 {
    auto* device = m_memoryManager->m_device;
-   auto logicalDevice = device->getLogicalDevice();
 
    VkSemaphore sbSemaphore = device->createTimelineSemaphore(0);
-
-   static uint64_t timelineValue = 0;
+   uint64_t timelineValue = 0;
 
    // stays the same so it's worth to store it outside of the loop
    constexpr VkCommandBufferBeginInfo beginInfo =
@@ -162,16 +160,9 @@ void DeviceMemoryManager::StagingBuffer::copyToBuffer(const void* data, VkBuffer
       .pInheritanceInfo = nullptr
    };
 
-   const VkSemaphoreWaitInfo waitInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO, nullptr, 0, 1, &sbSemaphore, &timelineValue };
-   auto awaitQueue = [&]() {
-      const uint64_t currentValue = device->getTimelineSemaphoreValue(sbSemaphore);
-      if (currentValue < timelineValue)
-         vkWaitSemaphores(logicalDevice, &waitInfo, UINT64_MAX);
-   };
-
    do
    {
-      awaitQueue();
+      device->waitForSemaphore(sbSemaphore, timelineValue);
 
       // reset command buffer
       vkResetCommandBuffer(m_transferCommandBuffers[0], 0);
@@ -215,13 +206,13 @@ void DeviceMemoryManager::StagingBuffer::copyToBuffer(const void* data, VkBuffer
    } while(size > 0);
 
    // ensure everything is completed
-   awaitQueue();
-   vkDestroySemaphore(logicalDevice, sbSemaphore, nullptr);
+   device->waitForSemaphore(sbSemaphore, timelineValue);
+   vkDestroySemaphore(*device, sbSemaphore, nullptr);
 }
 
-void DeviceMemoryManager::StagingBuffer::copyToImage()
+void DeviceMemoryManager::StagingBuffer::copyToImage(const void* data, VkImage image, VkExtent3D extent)
 {
-
+   throw std::runtime_error("Method unimplemented yet.");
 }
 
 DeviceMemoryManager::StagingBuffer::~StagingBuffer()

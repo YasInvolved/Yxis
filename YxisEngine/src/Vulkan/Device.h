@@ -22,6 +22,9 @@ namespace Yxis::Vulkan
       Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndices);
       ~Device();
 
+      operator VkDevice() const;
+      operator VkPhysicalDevice() const;
+
       Device(const Device&) = delete;
       Device& operator=(const Device&) = delete;
 
@@ -64,6 +67,7 @@ namespace Yxis::Vulkan
       const VkFence createFence(bool signaled) const;
       const VkSemaphore craeteSemaphore() const;
       const VkSemaphore createTimelineSemaphore(uint64_t initialValue) const;
+      void waitForSemaphore(VkSemaphore semaphore, const uint64_t waitValue, const uint64_t timeout = UINT64_MAX) const;
       void signalTimelineSemaphore(VkSemaphore semaphore, uint64_t newValue) const;
       uint64_t getTimelineSemaphoreValue(VkSemaphore semaphore) const;
    private:

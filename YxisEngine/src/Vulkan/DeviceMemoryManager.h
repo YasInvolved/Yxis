@@ -54,13 +54,12 @@ namespace Yxis::Vulkan
          ~StagingBuffer();
       
          void copyToBuffer(const void* data, VkBuffer buffer, VkDeviceSize size);
-         void copyToImage();
+         void copyToImage(const void* data, VkImage image, VkExtent3D extent);
 
       private:
          static constexpr size_t s_sbChunks = 8;
          static constexpr size_t s_sbChunkSize = 32 * 1024; // 32kb
          static constexpr VkDeviceSize s_sbSize = s_sbChunks * s_sbChunkSize;
-         struct Chunk { uint8_t data[s_sbChunkSize]; };
 
          DeviceMemoryManager* m_memoryManager;
          std::array<VkCommandBuffer, 1> m_transferCommandBuffers;

@@ -122,6 +122,15 @@ Device::Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndice
    YX_CORE_LOGGER->info("Copying to benchmark buffer took {}ms", duration.count());
 }
 
+Device::operator VkDevice() const
+{
+   return m_device;
+}
+Device::operator VkPhysicalDevice() const
+{
+   return m_physicalDevice;
+}
+
 const VkDevice Device::getLogicalDevice() const
 {
    return m_device;
@@ -270,6 +279,20 @@ const VkSemaphore Device::createTimelineSemaphore(uint64_t initialValue) const
       throw std::runtime_error(fmt::format("Failed to create a timeline semaphore. {}", string_VkResult(result)));
 
    return semaphore;
+}
+
+void Device::waitForSemaphore(const VkSemaphore semaphore, const uint64_t waitValue, const uint64_t timeout) const
+{
+   const uint64_t currentValue = getTimelineSemaphoreValue(semaphore);
+   if (currentValue < waitValue)
+   {
+      const VkSemaphoreWaitInfo waitInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO, nullptr, 0, 1, &semaphore, &waitValue };
+      VkResult result = vkWaitSemaphores(m_device, &waitInfo, timeout);
+      if (result == VK_TIMEOUT)
+         YX_CORE_LOGGER->warn("Reached timeout when waiting on semaphore.");
+      else if (result != VK_SUCCESS && result != VK_TIMEOUT)
+         throw std::runtime_error(fmt::format("Failed to wait for semaphore. {}", string_VkResult(result)));
+   }
 }
 
 void Device::signalTimelineSemaphore(VkSemaphore semaphore, uint64_t newValue) const
