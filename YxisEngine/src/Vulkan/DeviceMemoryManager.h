@@ -34,8 +34,8 @@ namespace Yxis::Vulkan
 
    public:
       DeviceMemoryManager(const Device* device);
-      VkBuffer createBuffer(const VkBufferCreateInfo& createInfo);
-      VkImage createImage(const VkImageCreateInfo& createInfo);
+      VkBuffer createBuffer(VkBufferCreateInfo& createInfo);
+      VkImage createImage(VkImageCreateInfo& createInfo);
       void copyToBuffer(const void* asset, VkBuffer buffer, std::optional<VkDeviceSize> size = {});
       void copyToImage(const void* asset, VkImage image, std::optional<VkDeviceSize> size = {});
       void deleteAsset(VkBuffer buffer);
@@ -50,21 +50,25 @@ namespace Yxis::Vulkan
       class StagingBuffer 
       {
       public:
-         StagingBuffer(DeviceMemoryManager* memoryManager, VkDeviceSize size);
+         StagingBuffer(DeviceMemoryManager* memoryManager);
          ~StagingBuffer();
       
-      protected:
-         void copyToBuffer();
+         void copyToBuffer(const void* data, VkBuffer buffer, VkDeviceSize size);
          void copyToImage();
 
       private:
-         VkDeviceSize m_size;
+         static constexpr size_t s_sbChunks = 8;
+         static constexpr size_t s_sbChunkSize = 32 * 1024; // 32kb
+         static constexpr VkDeviceSize s_sbSize = s_sbChunks * s_sbChunkSize;
+         struct Chunk { uint8_t data[s_sbChunkSize]; };
+
          DeviceMemoryManager* m_memoryManager;
-         std::atomic<VkDeviceSize> head = 0, tail = 0;
+         std::array<VkCommandBuffer, 1> m_transferCommandBuffers;
+
          void* m_memPtr;
          VmaAllocation m_sbAllocation;
          VkBuffer m_stagingBuffer;
-         std::array<VkCommandBuffer, 1> m_transferCommandBuffers;
+         VkQueue m_transferQueue;
       };
 
       std::unique_ptr<StagingBuffer> m_stagingBuffer;

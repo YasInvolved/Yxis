@@ -9,8 +9,6 @@
 
 using namespace Yxis::Vulkan;
 
-static constexpr VkDeviceSize s_stagingBufferSize = 256 * 1024 * 1024; // 256mb
-
 DeviceMemoryManager::DeviceMemoryManager(const Device* device)
    : m_device(device)
 {
@@ -38,11 +36,14 @@ DeviceMemoryManager::DeviceMemoryManager(const Device* device)
    if (result != VK_SUCCESS)
       throw std::runtime_error(fmt::format("Failed to create device memory allocator. {}", string_VkResult(result)));
 
-   m_stagingBuffer = std::make_unique<StagingBuffer>(this, s_stagingBufferSize);
+   m_stagingBuffer = std::make_unique<StagingBuffer>(this);
 }
 
-VkBuffer DeviceMemoryManager::createBuffer(const VkBufferCreateInfo& createInfo)
+VkBuffer DeviceMemoryManager::createBuffer(VkBufferCreateInfo& createInfo)
 {
+   if ((createInfo.usage & VK_BUFFER_USAGE_TRANSFER_DST_BIT) != VK_BUFFER_USAGE_TRANSFER_DST_BIT)
+      createInfo.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
    const VmaAllocationCreateInfo allocInfo =
    {
       .usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
@@ -60,7 +61,7 @@ VkBuffer DeviceMemoryManager::createBuffer(const VkBufferCreateInfo& createInfo)
    return buffer;
 }
 
-VkImage DeviceMemoryManager::createImage(const VkImageCreateInfo& createInfo)
+VkImage DeviceMemoryManager::createImage(VkImageCreateInfo& createInfo)
 {
    const VmaAllocationCreateInfo allocInfo =
    {
@@ -79,16 +80,6 @@ VkImage DeviceMemoryManager::createImage(const VkImageCreateInfo& createInfo)
    return image;
 }
 
-void DeviceMemoryManager::copyToBuffer(const void* asset, VkBuffer buffer, std::optional<VkDeviceSize> size)
-{
-
-}
-
-void DeviceMemoryManager::copyToImage(const void* asset, VkImage image, std::optional<VkDeviceSize> size)
-{
-
-}
-
 void DeviceMemoryManager::deleteAsset(VkBuffer buffer)
 {
    ResourceKey key = std::make_pair(reinterpret_cast<uintptr_t>(buffer), ResourceType::BUFFER);
@@ -103,16 +94,33 @@ void DeviceMemoryManager::deleteAsset(VkImage image)
    vmaDestroyImage(m_allocator, image, allocation);
 }
 
+void DeviceMemoryManager::copyToBuffer(const void* asset, VkBuffer buffer, std::optional<VkDeviceSize> size)
+{
+   if (not size.has_value())
+   {
+      VkMemoryRequirements memRequirements;
+      vkGetBufferMemoryRequirements(m_device->getLogicalDevice(), buffer, &memRequirements);
+      size = memRequirements.size;
+   }
+
+   m_stagingBuffer->copyToBuffer(asset, buffer, size.value());
+}
+
+void DeviceMemoryManager::copyToImage(const void* asset, VkImage image, std::optional<VkDeviceSize> size)
+{
+
+}
+
 // STAGING BUFFER
-DeviceMemoryManager::StagingBuffer::StagingBuffer(DeviceMemoryManager* memoryManager, VkDeviceSize size)
-   : m_memoryManager(memoryManager), m_size(size)
+DeviceMemoryManager::StagingBuffer::StagingBuffer(DeviceMemoryManager* memoryManager)
+   : m_memoryManager(memoryManager)
 {
    const VkBufferCreateInfo createInfo =
    {
       .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
       .pNext = nullptr,
       .flags = 0,
-      .size = size,
+      .size = s_sbSize,
       .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
       .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
       .queueFamilyIndexCount = 1,
@@ -133,11 +141,82 @@ DeviceMemoryManager::StagingBuffer::StagingBuffer(DeviceMemoryManager* memoryMan
 
    m_memPtr = allocInfo.pMappedData;
    m_transferCommandBuffers = m_memoryManager->m_device->allocateCommandBuffers<1>(Device::QueueType::TRANSFER, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+   m_transferQueue = m_memoryManager->m_device->getQueue(Device::QueueType::TRANSFER);
 }
 
-void DeviceMemoryManager::StagingBuffer::copyToBuffer()
+void DeviceMemoryManager::StagingBuffer::copyToBuffer(const void* data, VkBuffer buffer, VkDeviceSize size)
 {
+   auto* device = m_memoryManager->m_device;
+   auto logicalDevice = device->getLogicalDevice();
 
+   VkSemaphore sbSemaphore = device->createTimelineSemaphore(0);
+
+   static uint64_t timelineValue = 0;
+
+   // stays the same so it's worth to store it outside of the loop
+   constexpr VkCommandBufferBeginInfo beginInfo =
+   {
+      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+      .pNext = nullptr,
+      .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+      .pInheritanceInfo = nullptr
+   };
+
+   const VkSemaphoreWaitInfo waitInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO, nullptr, 0, 1, &sbSemaphore, &timelineValue };
+   auto awaitQueue = [&]() {
+      const uint64_t currentValue = device->getTimelineSemaphoreValue(sbSemaphore);
+      if (currentValue < timelineValue)
+         vkWaitSemaphores(logicalDevice, &waitInfo, UINT64_MAX);
+   };
+
+   do
+   {
+      awaitQueue();
+
+      // reset command buffer
+      vkResetCommandBuffer(m_transferCommandBuffers[0], 0);
+
+      size_t opSize = size < s_sbChunkSize ? size : s_sbChunkSize;
+      size_t srcOffset = (timelineValue % s_sbChunks) * s_sbChunkSize;
+      size_t dstOffset = timelineValue * s_sbChunkSize;
+      std::memcpy(static_cast<uint8_t*>(m_memPtr) + srcOffset, static_cast<const uint8_t*>(data) + srcOffset, opSize); // copy to the staging buffer
+
+      // gpu work
+      vkBeginCommandBuffer(m_transferCommandBuffers[0], &beginInfo);
+      const VkBufferCopy copyRegion{ srcOffset, dstOffset, opSize };
+      vkCmdCopyBuffer(m_transferCommandBuffers[0], m_stagingBuffer, buffer, 1, &copyRegion);
+      vkEndCommandBuffer(m_transferCommandBuffers[0]);
+
+      timelineValue++;
+      const VkTimelineSemaphoreSubmitInfo semaphoreSubmitInfo =
+      {
+         .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
+         .pNext = nullptr,
+         .waitSemaphoreValueCount = 0,
+         .pWaitSemaphoreValues = nullptr,
+         .signalSemaphoreValueCount = 1,
+         .pSignalSemaphoreValues = &timelineValue
+      };
+
+      const VkSubmitInfo submitInfo =
+      {
+         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+         .pNext = &semaphoreSubmitInfo,
+         .waitSemaphoreCount = 0,
+         .pWaitSemaphores = nullptr,
+         .commandBufferCount = 1,
+         .pCommandBuffers = &m_transferCommandBuffers[0],
+         .signalSemaphoreCount = 1,
+         .pSignalSemaphores = &sbSemaphore,
+      };
+
+      vkQueueSubmit(m_transferQueue, 1, &submitInfo, VK_NULL_HANDLE);
+      size -= opSize;
+   } while(size > 0);
+
+   // ensure everything is completed
+   awaitQueue();
+   vkDestroySemaphore(logicalDevice, sbSemaphore, nullptr);
 }
 
 void DeviceMemoryManager::StagingBuffer::copyToImage()

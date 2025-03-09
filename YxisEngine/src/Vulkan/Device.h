@@ -65,7 +65,7 @@ namespace Yxis::Vulkan
       const VkSemaphore craeteSemaphore() const;
       const VkSemaphore createTimelineSemaphore(uint64_t initialValue) const;
       void signalTimelineSemaphore(VkSemaphore semaphore, uint64_t newValue) const;
-      inline bool checkTimelineSemaphoreCompletion(VkSemaphore semaphore, uint64_t expectedValue) const;
+      uint64_t getTimelineSemaphoreValue(VkSemaphore semaphore) const;
    private:
       VkDevice m_device;
       VkPhysicalDevice m_physicalDevice;
