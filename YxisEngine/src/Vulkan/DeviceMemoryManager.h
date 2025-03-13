@@ -37,7 +37,7 @@ namespace Yxis::Vulkan
       VkBuffer createBuffer(VkBufferCreateInfo& createInfo);
       VkImage createImage(VkImageCreateInfo& createInfo);
       void copyToBuffer(const void* asset, VkBuffer buffer, std::optional<VkDeviceSize> size = {});
-      void copyToImage(const void* asset, VkImage image, std::optional<VkDeviceSize> size = {});
+      void copyToImage(const void* asset, VkImage image, VkExtent3D extent);
       void deleteAsset(VkBuffer buffer);
       void deleteAsset(VkImage image);
       ~DeviceMemoryManager();
@@ -54,7 +54,7 @@ namespace Yxis::Vulkan
          ~StagingBuffer();
       
          void copyToBuffer(const void* data, VkBuffer buffer, VkDeviceSize size);
-         void copyToImage(const void* data, VkImage image, VkExtent3D extent);
+         void copyToImage(const void* data, VkImage image, VkExtent3D extent, VkDeviceSize size);
 
       private:
          static constexpr size_t s_sbChunks = 8;

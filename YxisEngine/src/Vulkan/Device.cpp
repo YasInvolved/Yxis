@@ -95,31 +95,7 @@ Device::Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndice
    }
 
    m_swapchain = std::make_unique<Swapchain>(this);
-   m_memoryManager = std::make_unique<DeviceMemoryManager>(this);
-
-   // TODO: remove this benchmark
-   using clock_t = std::chrono::high_resolution_clock;
-   using time_resolution_t = std::chrono::milliseconds;
-
-   constexpr size_t BENCHMARK_BUFFER_SIZE = 256 * 1024 * 1024; // 256mb
-   VkBufferCreateInfo createInfo =
-   {
-      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-      .pNext = nullptr,
-      .flags = 0,
-      .size = BENCHMARK_BUFFER_SIZE,
-      .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-   };
-
-   auto benchmarkBuffer = m_memoryManager->createBuffer(createInfo);
-   uint32_t counter = 0;
-   std::vector<uint8_t> bufferData(BENCHMARK_BUFFER_SIZE);
-   std::generate(bufferData.begin(), bufferData.end(), [&]() { counter = (counter + 1) % UINT8_MAX; return counter; });
-   auto startTime = clock_t::now();
-   m_memoryManager->copyToBuffer(bufferData.data(), benchmarkBuffer, BENCHMARK_BUFFER_SIZE);
-   auto stopTime = clock_t::now();
-   auto duration = std::chrono::duration_cast<time_resolution_t>(stopTime - startTime);
-   YX_CORE_LOGGER->info("Copying to benchmark buffer took {}ms", duration.count());
+   memoryManager = std::make_unique<DeviceMemoryManager>(this);
 }
 
 Device::operator VkDevice() const
@@ -312,7 +288,7 @@ uint64_t Device::getTimelineSemaphoreValue(VkSemaphore semaphore) const
 
 Device::~Device()
 {
-   m_memoryManager.reset();
+   memoryManager.reset();
    m_swapchain.reset();
    vkDestroyCommandPool(m_device, m_commandPools.gfxCommandPool, nullptr);
    vkDestroyCommandPool(m_device, m_commandPools.computeCommandPool, nullptr);

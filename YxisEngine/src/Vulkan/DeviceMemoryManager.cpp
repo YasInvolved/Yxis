@@ -6,8 +6,18 @@
 
 #define VMA_IMPLEMENTATION
 #include <vk_mem_alloc.h>
+#include "VulkanUtilities.h"
 
 using namespace Yxis::Vulkan;
+
+// it doesn't change and multiple functions use it, so it's better to leave it outside
+static constexpr VkCommandBufferBeginInfo s_transferCmdBufferBeginInfo =
+{
+   .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+   .pNext = nullptr,
+   .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+   .pInheritanceInfo = nullptr
+};
 
 DeviceMemoryManager::DeviceMemoryManager(const Device* device)
    : m_device(device)
@@ -99,16 +109,15 @@ void DeviceMemoryManager::copyToBuffer(const void* asset, VkBuffer buffer, std::
    if (not size.has_value())
    {
       VkMemoryRequirements memRequirements;
-      vkGetBufferMemoryRequirements(m_device->getLogicalDevice(), buffer, &memRequirements);
+      vkGetBufferMemoryRequirements(*m_device, buffer, &memRequirements);
       size = memRequirements.size;
    }
 
    m_stagingBuffer->copyToBuffer(asset, buffer, size.value());
 }
 
-void DeviceMemoryManager::copyToImage(const void* asset, VkImage image, std::optional<VkDeviceSize> size)
+void DeviceMemoryManager::copyToImage(const void* asset, VkImage image, VkExtent3D extent)
 {
-
 }
 
 // STAGING BUFFER
@@ -151,15 +160,6 @@ void DeviceMemoryManager::StagingBuffer::copyToBuffer(const void* data, VkBuffer
    VkSemaphore sbSemaphore = device->createTimelineSemaphore(0);
    uint64_t timelineValue = 0;
 
-   // stays the same so it's worth to store it outside of the loop
-   constexpr VkCommandBufferBeginInfo beginInfo =
-   {
-      .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-      .pNext = nullptr,
-      .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-      .pInheritanceInfo = nullptr
-   };
-
    do
    {
       device->waitForSemaphore(sbSemaphore, timelineValue);
@@ -168,13 +168,13 @@ void DeviceMemoryManager::StagingBuffer::copyToBuffer(const void* data, VkBuffer
       vkResetCommandBuffer(m_transferCommandBuffers[0], 0);
 
       size_t opSize = size < s_sbChunkSize ? size : s_sbChunkSize;
-      size_t srcOffset = (timelineValue % s_sbChunks) * s_sbChunkSize;
-      size_t dstOffset = timelineValue * s_sbChunkSize;
-      std::memcpy(static_cast<uint8_t*>(m_memPtr) + srcOffset, static_cast<const uint8_t*>(data) + srcOffset, opSize); // copy to the staging buffer
+      size_t sbOffset = (timelineValue % s_sbChunks) * s_sbChunkSize;
+      size_t bufferOffset = timelineValue * s_sbChunkSize;
+      std::memcpy(static_cast<uint8_t*>(m_memPtr) + sbOffset, static_cast<const uint8_t*>(data) + bufferOffset, opSize); // copy to the staging buffer
 
       // gpu work
-      vkBeginCommandBuffer(m_transferCommandBuffers[0], &beginInfo);
-      const VkBufferCopy copyRegion{ srcOffset, dstOffset, opSize };
+      vkBeginCommandBuffer(m_transferCommandBuffers[0], &s_transferCmdBufferBeginInfo);
+      const VkBufferCopy copyRegion{ sbOffset, bufferOffset, opSize };
       vkCmdCopyBuffer(m_transferCommandBuffers[0], m_stagingBuffer, buffer, 1, &copyRegion);
       vkEndCommandBuffer(m_transferCommandBuffers[0]);
 
@@ -203,16 +203,16 @@ void DeviceMemoryManager::StagingBuffer::copyToBuffer(const void* data, VkBuffer
 
       vkQueueSubmit(m_transferQueue, 1, &submitInfo, VK_NULL_HANDLE);
       size -= opSize;
-   } while(size > 0);
+   } while (size > 0);
 
    // ensure everything is completed
    device->waitForSemaphore(sbSemaphore, timelineValue);
    vkDestroySemaphore(*device, sbSemaphore, nullptr);
 }
 
-void DeviceMemoryManager::StagingBuffer::copyToImage(const void* data, VkImage image, VkExtent3D extent)
+void DeviceMemoryManager::StagingBuffer::copyToImage(const void* data, VkImage image, VkExtent3D extent, VkDeviceSize size)
 {
-   throw std::runtime_error("Method unimplemented yet.");
+   YX_CORE_LOGGER->error("Not implemented");
 }
 
 DeviceMemoryManager::StagingBuffer::~StagingBuffer()

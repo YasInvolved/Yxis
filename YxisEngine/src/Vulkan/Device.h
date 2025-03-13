@@ -70,6 +70,9 @@ namespace Yxis::Vulkan
       void waitForSemaphore(VkSemaphore semaphore, const uint64_t waitValue, const uint64_t timeout = UINT64_MAX) const;
       void signalTimelineSemaphore(VkSemaphore semaphore, uint64_t newValue) const;
       uint64_t getTimelineSemaphoreValue(VkSemaphore semaphore) const;
+      
+      // memory manager
+      std::unique_ptr<DeviceMemoryManager> memoryManager;
    private:
       VkDevice m_device;
       VkPhysicalDevice m_physicalDevice;
@@ -81,7 +84,6 @@ namespace Yxis::Vulkan
       } m_commandPools;
 
       std::unique_ptr<Swapchain> m_swapchain;
-      std::unique_ptr<DeviceMemoryManager> m_memoryManager;
 
       struct {
          VkQueue graphicsQueue = VK_NULL_HANDLE;
