@@ -22,6 +22,9 @@ namespace Yxis::Vulkan
       Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndices);
       ~Device();
 
+      operator VkDevice() const;
+      operator VkPhysicalDevice() const;
+
       Device(const Device&) = delete;
       Device& operator=(const Device&) = delete;
 
@@ -30,17 +33,57 @@ namespace Yxis::Vulkan
       const VkSurfaceCapabilities2KHR getSurfaceCapabilities() const;
       const std::vector<VkSurfaceFormat2KHR> getSurfaceFormats() const;
       const std::vector<VkPresentModeKHR> getPresentModes() const;
+
+      // queues
       const QueueFamilyIndices& getQueueFamilyIndices() const;
       const VkQueue getQueue(QueueType type) const;
+      const VkCommandPool getCommandPoolForQueueType(QueueType type) const;
+
+      template <uint32_t count>
+      const std::array<VkCommandBuffer, count> allocateCommandBuffers(QueueType queueType, const VkCommandBufferLevel level) const
+      {
+         VkCommandPool commandPool = getCommandPoolForQueueType(queueType);
+         assert(commandPool != VK_NULL_HANDLE && "commandPool is null");
+         std::array<VkCommandBuffer, count> commandBuffers;
+         const VkCommandBufferAllocateInfo allocateInfo =
+         {
+            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+            .pNext = nullptr,
+            .commandPool = commandPool,
+            .level = level,
+            .commandBufferCount = count
+         };
+
+         VkResult result = vkAllocateCommandBuffers(m_device, &allocateInfo, commandBuffers.data());
+         if (result != VK_SUCCESS)
+            throw std::runtime_error(fmt::format("Failed to create {} command buffers. {}", count, string_VkResult(result)));
+
+         return commandBuffers;
+      }
+
+      void freeCommandBuffers(Device::QueueType type, const std::span<VkCommandBuffer> commandBuffers) const;
+
+      // synchronization
       const VkFence createFence(bool signaled) const;
       const VkSemaphore craeteSemaphore() const;
+      const VkSemaphore createTimelineSemaphore(uint64_t initialValue) const;
+      void waitForSemaphore(VkSemaphore semaphore, const uint64_t waitValue, const uint64_t timeout = UINT64_MAX) const;
+      void signalTimelineSemaphore(VkSemaphore semaphore, uint64_t newValue) const;
+      uint64_t getTimelineSemaphoreValue(VkSemaphore semaphore) const;
+      
+      // memory manager
+      std::unique_ptr<DeviceMemoryManager> memoryManager;
    private:
       VkDevice m_device;
       VkPhysicalDevice m_physicalDevice;
-      VkCommandPool m_commandPool;
+
+      struct {
+         VkCommandPool gfxCommandPool;
+         VkCommandPool computeCommandPool;
+         VkCommandPool transferCommandPool;
+      } m_commandPools;
 
       std::unique_ptr<Swapchain> m_swapchain;
-      std::unique_ptr<DeviceMemoryManager> m_memoryManager;
 
       struct {
          VkQueue graphicsQueue = VK_NULL_HANDLE;

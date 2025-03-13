@@ -41,6 +41,8 @@ namespace Yxis
              if (event.type == SDL_EVENT_WINDOW_RESIZED)
                  Events::EventDispatcher::dispatch(std::make_shared<Events::IWindowResizedEvent>(event.window.data1, event.window.data2));
          }
+
+         // render
       }
 
       Vulkan::VulkanRenderer::destroy();

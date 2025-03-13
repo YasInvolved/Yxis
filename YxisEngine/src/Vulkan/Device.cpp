@@ -27,11 +27,22 @@ Device::Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndice
 #endif
    };
 
-   auto features = Utils::getDeviceFeatures(m_physicalDevice);
+   
+   VkPhysicalDeviceFeatures2 features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
+
+   // link structures (vk14 -> vk13 -> vk12 -> vk11)
+   VkPhysicalDeviceVulkan11Features vulkan11Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
+   VkPhysicalDeviceVulkan12Features vulkan12Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, &vulkan11Features };
+   VkPhysicalDeviceVulkan13Features vulkan13Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES, &vulkan12Features };
+   VkPhysicalDeviceVulkan14Features vulkan14Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES, &vulkan13Features };
+   features.pNext = &vulkan14Features;
+
+   vkGetPhysicalDeviceFeatures2(physicalDevice, &features);
+
    VkDeviceCreateInfo deviceCreateInfo =
    {
       .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-      .pNext = nullptr,
+      .pNext = &features,
       .flags = 0,
       .queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size()),
       .pQueueCreateInfos = queueCreateInfos.data(),
@@ -39,7 +50,6 @@ Device::Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndice
       .ppEnabledLayerNames = deviceEnabledLayers.data(),
       .enabledExtensionCount = static_cast<uint32_t>(std::size(deviceEnabledExtensions)),
       .ppEnabledExtensionNames = deviceEnabledExtensions,
-      .pEnabledFeatures = &features.features,
    };
 
    VkResult result = vkCreateDevice(m_physicalDevice, &deviceCreateInfo, nullptr, &m_device);
@@ -67,23 +77,34 @@ Device::Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndice
       vkGetDeviceQueue2(m_device, &queueInfo, &m_queues.transferQueue);
    }
 
-   m_swapchain = std::make_unique<Swapchain>(this);
-   m_memoryManager = std::make_unique<DeviceMemoryManager>(this);
-
-   // testing memory manager (TODO: Remove)
-   constexpr VkBufferCreateInfo testBuffer =
    {
-      .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-      .pNext = nullptr,
-      .flags = 0,
-      .size = 1024 * 1024,
-      .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
-      .sharingMode = VK_SHARING_MODE_EXCLUSIVE,
-      .queueFamilyIndexCount = 0,
-      .pQueueFamilyIndices = nullptr,
-   };
+      VkCommandPoolCreateInfo commandPoolCreateInfo{ VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, nullptr, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, m_queueFamilies.gfxIndex };
+      result = vkCreateCommandPool(m_device, &commandPoolCreateInfo, nullptr, &m_commandPools.gfxCommandPool);
+      if (result != VK_SUCCESS)
+         throw std::runtime_error(fmt::format("Failed to create a graphics command pool. {}", string_VkResult(result)));
 
-   VkBuffer buffer = m_memoryManager->createBuffer(testBuffer);
+      commandPoolCreateInfo.queueFamilyIndex = m_queueFamilies.computeIndex.value();
+      result = vkCreateCommandPool(m_device, &commandPoolCreateInfo, nullptr, &m_commandPools.computeCommandPool);
+      if (result != VK_SUCCESS)
+         throw std::runtime_error(fmt::format("Failed to create a compute command pool. {}", string_VkResult(result)));
+
+      commandPoolCreateInfo.queueFamilyIndex = m_queueFamilies.transferIndex.value();
+      result = vkCreateCommandPool(m_device, &commandPoolCreateInfo, nullptr, &m_commandPools.transferCommandPool);
+      if (result != VK_SUCCESS)
+         throw std::runtime_error(fmt::format("Failed to create a transfer command pool. {}", string_VkResult(result)));
+   }
+
+   m_swapchain = std::make_unique<Swapchain>(this);
+   memoryManager = std::make_unique<DeviceMemoryManager>(this);
+}
+
+Device::operator VkDevice() const
+{
+   return m_device;
+}
+Device::operator VkPhysicalDevice() const
+{
+   return m_physicalDevice;
 }
 
 const VkDevice Device::getLogicalDevice() const
@@ -178,10 +199,34 @@ const VkQueue Device::getQueue(Device::QueueType type) const
    return VK_NULL_HANDLE;
 }
 
+const VkCommandPool Device::getCommandPoolForQueueType(Device::QueueType type) const
+{
+   switch (type)
+   {
+   case QueueType::GRAPHICS:
+      return m_commandPools.gfxCommandPool;
+      break;
+   case QueueType::COMPUTE:
+      return m_commandPools.computeCommandPool;
+      break;
+   case QueueType::TRANSFER:
+      return m_commandPools.transferCommandPool;
+      break;
+   default:
+      return VK_NULL_HANDLE;
+      break;
+   }
+}
+
+void Device::freeCommandBuffers(Device::QueueType type, const std::span<VkCommandBuffer> commandBuffers) const
+{
+   vkFreeCommandBuffers(m_device, getCommandPoolForQueueType(type), static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
+}
+
 const VkFence Device::createFence(bool signaled) const
 {
    VkFence fence;
-   const VkFenceCreateInfo createInfo{ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, nullptr, signaled ? VK_FENCE_CREATE_SIGNALED_BIT : 0 };
+   const VkFenceCreateInfo createInfo{ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, nullptr, signaled ? VK_FENCE_CREATE_SIGNALED_BIT : static_cast<VkFenceCreateFlags>(0) };
    VkResult result = vkCreateFence(m_device, &createInfo, nullptr, &fence);
    if (result != VK_SUCCESS)
       throw std::runtime_error(fmt::format("Failed to create a fence. {}", string_VkResult(result)));
@@ -200,10 +245,54 @@ const VkSemaphore Device::craeteSemaphore() const
    return semaphore;
 }
 
+const VkSemaphore Device::createTimelineSemaphore(uint64_t initialValue) const
+{
+   VkSemaphore semaphore;
+   const VkSemaphoreTypeCreateInfo typeInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO, nullptr, VK_SEMAPHORE_TYPE_TIMELINE, initialValue };
+   const VkSemaphoreCreateInfo createInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, &typeInfo, 0 };
+   VkResult result = vkCreateSemaphore(m_device, &createInfo, nullptr, &semaphore);
+   if (result != VK_SUCCESS)
+      throw std::runtime_error(fmt::format("Failed to create a timeline semaphore. {}", string_VkResult(result)));
+
+   return semaphore;
+}
+
+void Device::waitForSemaphore(const VkSemaphore semaphore, const uint64_t waitValue, const uint64_t timeout) const
+{
+   const uint64_t currentValue = getTimelineSemaphoreValue(semaphore);
+   if (currentValue < waitValue)
+   {
+      const VkSemaphoreWaitInfo waitInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO, nullptr, 0, 1, &semaphore, &waitValue };
+      VkResult result = vkWaitSemaphores(m_device, &waitInfo, timeout);
+      if (result == VK_TIMEOUT)
+         YX_CORE_LOGGER->warn("Reached timeout when waiting on semaphore.");
+      else if (result != VK_SUCCESS && result != VK_TIMEOUT)
+         throw std::runtime_error(fmt::format("Failed to wait for semaphore. {}", string_VkResult(result)));
+   }
+}
+
+void Device::signalTimelineSemaphore(VkSemaphore semaphore, uint64_t newValue) const
+{
+   const VkSemaphoreSignalInfo signalInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO, nullptr, semaphore, newValue };
+   VkResult result = vkSignalSemaphore(m_device, &signalInfo);
+   if (result != VK_SUCCESS)
+      throw std::runtime_error(fmt::format("Failed to signal a timeline semaphore. {}", string_VkResult(result)));
+}
+
+uint64_t Device::getTimelineSemaphoreValue(VkSemaphore semaphore) const
+{
+   uint64_t currentValue;
+   vkGetSemaphoreCounterValue(m_device, semaphore, &currentValue);
+   return currentValue;
+}
+
 Device::~Device()
 {
-   m_memoryManager.reset();
+   memoryManager.reset();
    m_swapchain.reset();
+   vkDestroyCommandPool(m_device, m_commandPools.gfxCommandPool, nullptr);
+   vkDestroyCommandPool(m_device, m_commandPools.computeCommandPool, nullptr);
+   vkDestroyCommandPool(m_device, m_commandPools.transferCommandPool, nullptr);
    if (m_device != VK_NULL_HANDLE)
       vkDestroyDevice(m_device, nullptr);
 }

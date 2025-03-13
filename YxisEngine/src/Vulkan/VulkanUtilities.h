@@ -3,7 +3,6 @@
 namespace Yxis::Vulkan::Utils
 {
    // device-related
-   VkPhysicalDeviceFeatures2 getDeviceFeatures(VkPhysicalDevice physicalDevice) noexcept;
    VkPhysicalDeviceProperties2 getDeviceProperties(VkPhysicalDevice physicalDevice) noexcept;
    
    // this function is in case some more linked structures were needed

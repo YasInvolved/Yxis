@@ -34,10 +34,10 @@ namespace Yxis::Vulkan
 
    public:
       DeviceMemoryManager(const Device* device);
-      VkBuffer createBuffer(const VkBufferCreateInfo& createInfo);
-      VkImage createImage(const VkImageCreateInfo& createInfo);
-      void copyAssetToBuffer(const void* asset, VkBuffer buffer, std::optional<VkDeviceSize> size = {});
-      void copyAssetToBuffer(const void* asset, VkImage image, std::optional<VkDeviceSize> size = {});
+      VkBuffer createBuffer(VkBufferCreateInfo& createInfo);
+      VkImage createImage(VkImageCreateInfo& createInfo);
+      void copyToBuffer(const void* asset, VkBuffer buffer, std::optional<VkDeviceSize> size = {});
+      void copyToImage(const void* asset, VkImage image, VkExtent3D extent);
       void deleteAsset(VkBuffer buffer);
       void deleteAsset(VkImage image);
       ~DeviceMemoryManager();
@@ -47,13 +47,29 @@ namespace Yxis::Vulkan
       VmaAllocator m_allocator = nullptr;
       std::unordered_map<ResourceKey, VmaAllocation, ResourceKeyHash, ResourceKeyEqual> m_allocations;
 
-      void executeTransferBuffer(VkBuffer buffer, const VkBufferCopy memRegion);
+      class StagingBuffer 
+      {
+      public:
+         StagingBuffer(DeviceMemoryManager* memoryManager);
+         ~StagingBuffer();
+      
+         void copyToBuffer(const void* data, VkBuffer buffer, VkDeviceSize size);
+         void copyToImage(const void* data, VkImage image, VkExtent3D extent, VkDeviceSize size);
 
-      // staging buffer
-      VkBuffer m_stagingBuffer;
-      VmaAllocation m_stagingBufferMemory;
-      VkFence m_transferFence;
-      VkCommandPool m_transferQueueCommandPool;
-      VkCommandBuffer m_transferCommandBuffer;
+      private:
+         static constexpr size_t s_sbChunks = 8;
+         static constexpr size_t s_sbChunkSize = 32 * 1024; // 32kb
+         static constexpr VkDeviceSize s_sbSize = s_sbChunks * s_sbChunkSize;
+
+         DeviceMemoryManager* m_memoryManager;
+         std::array<VkCommandBuffer, 1> m_transferCommandBuffers;
+
+         void* m_memPtr;
+         VmaAllocation m_sbAllocation;
+         VkBuffer m_stagingBuffer;
+         VkQueue m_transferQueue;
+      };
+
+      std::unique_ptr<StagingBuffer> m_stagingBuffer;
    };
 }
