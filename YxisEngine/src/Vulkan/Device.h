@@ -3,6 +3,7 @@
 #include "../internal_pch.h"
 #include "Swapchain.h"
 #include "DeviceMemoryManager.h"
+#include "TimelineSemaphore.h"
 
 namespace Yxis::Vulkan
 {
@@ -64,12 +65,7 @@ namespace Yxis::Vulkan
       void freeCommandBuffers(Device::QueueType type, const std::span<VkCommandBuffer> commandBuffers) const;
 
       // synchronization
-      const VkFence createFence(bool signaled) const;
-      const VkSemaphore craeteSemaphore() const;
-      const VkSemaphore createTimelineSemaphore(uint64_t initialValue) const;
-      void waitForSemaphore(VkSemaphore semaphore, const uint64_t waitValue, const uint64_t timeout = UINT64_MAX) const;
-      void signalTimelineSemaphore(VkSemaphore semaphore, uint64_t newValue) const;
-      uint64_t getTimelineSemaphoreValue(VkSemaphore semaphore) const;
+      const TimelineSemaphore createTimelineSemaphore() const;
       
       // memory manager
       std::unique_ptr<DeviceMemoryManager> memoryManager;

@@ -223,67 +223,9 @@ void Device::freeCommandBuffers(Device::QueueType type, const std::span<VkComman
    vkFreeCommandBuffers(m_device, getCommandPoolForQueueType(type), static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
 }
 
-const VkFence Device::createFence(bool signaled) const
+const TimelineSemaphore Device::createTimelineSemaphore() const
 {
-   VkFence fence;
-   const VkFenceCreateInfo createInfo{ VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, nullptr, signaled ? VK_FENCE_CREATE_SIGNALED_BIT : static_cast<VkFenceCreateFlags>(0) };
-   VkResult result = vkCreateFence(m_device, &createInfo, nullptr, &fence);
-   if (result != VK_SUCCESS)
-      throw std::runtime_error(fmt::format("Failed to create a fence. {}", string_VkResult(result)));
-
-   return fence;
-}
-
-const VkSemaphore Device::craeteSemaphore() const
-{
-   VkSemaphore semaphore;
-   const VkSemaphoreCreateInfo createInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, nullptr, 0 };
-   VkResult result = vkCreateSemaphore(m_device, &createInfo, nullptr, &semaphore);
-   if (result != VK_SUCCESS)
-      throw std::runtime_error(fmt::format("Failed to create a semaphore. {}", string_VkResult(result)));
-
-   return semaphore;
-}
-
-const VkSemaphore Device::createTimelineSemaphore(uint64_t initialValue) const
-{
-   VkSemaphore semaphore;
-   const VkSemaphoreTypeCreateInfo typeInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_TYPE_CREATE_INFO, nullptr, VK_SEMAPHORE_TYPE_TIMELINE, initialValue };
-   const VkSemaphoreCreateInfo createInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO, &typeInfo, 0 };
-   VkResult result = vkCreateSemaphore(m_device, &createInfo, nullptr, &semaphore);
-   if (result != VK_SUCCESS)
-      throw std::runtime_error(fmt::format("Failed to create a timeline semaphore. {}", string_VkResult(result)));
-
-   return semaphore;
-}
-
-void Device::waitForSemaphore(const VkSemaphore semaphore, const uint64_t waitValue, const uint64_t timeout) const
-{
-   const uint64_t currentValue = getTimelineSemaphoreValue(semaphore);
-   if (currentValue < waitValue)
-   {
-      const VkSemaphoreWaitInfo waitInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO, nullptr, 0, 1, &semaphore, &waitValue };
-      VkResult result = vkWaitSemaphores(m_device, &waitInfo, timeout);
-      if (result == VK_TIMEOUT)
-         YX_CORE_LOGGER->warn("Reached timeout when waiting on semaphore.");
-      else if (result != VK_SUCCESS && result != VK_TIMEOUT)
-         throw std::runtime_error(fmt::format("Failed to wait for semaphore. {}", string_VkResult(result)));
-   }
-}
-
-void Device::signalTimelineSemaphore(VkSemaphore semaphore, uint64_t newValue) const
-{
-   const VkSemaphoreSignalInfo signalInfo{ VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO, nullptr, semaphore, newValue };
-   VkResult result = vkSignalSemaphore(m_device, &signalInfo);
-   if (result != VK_SUCCESS)
-      throw std::runtime_error(fmt::format("Failed to signal a timeline semaphore. {}", string_VkResult(result)));
-}
-
-uint64_t Device::getTimelineSemaphoreValue(VkSemaphore semaphore) const
-{
-   uint64_t currentValue;
-   vkGetSemaphoreCounterValue(m_device, semaphore, &currentValue);
-   return currentValue;
+   return TimelineSemaphore(this, 0);
 }
 
 Device::~Device()
