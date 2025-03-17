@@ -1,7 +1,6 @@
 #include "VulkanRenderer.h"
 #include "../Window.h"
 #include <Yxis/Logger.h>
-#include "VulkanUtilities.h"
 
 using namespace Yxis::Vulkan;
 
@@ -130,7 +129,8 @@ void VulkanRenderer::initialize(const std::string& appName)
 
       for (const auto& physicalDevice : physicalDevices)
       {
-         VkPhysicalDeviceProperties2 properties = Utils::getDeviceProperties(physicalDevice);
+         VkPhysicalDeviceProperties2 properties{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2 };
+         vkGetPhysicalDeviceProperties2(physicalDevice, &properties);
 
          YX_CORE_LOGGER->info("Found device!");
          YX_CORE_LOGGER->info("Name: {}", properties.properties.deviceName);
@@ -144,37 +144,8 @@ void VulkanRenderer::initialize(const std::string& appName)
       if (selectedDevice == VK_NULL_HANDLE)
          selectedDevice = physicalDevices[0];
    }
-
-   {
-      const std::vector<VkQueueFamilyProperties2> queueFamilies = std::move(Utils::getDeviceQueueFamilies(selectedDevice));
-
-      QueueFamilyIndices queueFamilyIndices;
-
-      for (uint32_t i = 0; i < queueFamilies.size(); i++)
-      {
-         const auto& properties = queueFamilies[i].queueFamilyProperties;
-
-         if (Utils::deviceQueueHasCapabilities(properties, VK_QUEUE_GRAPHICS_BIT))
-         {
-            queueFamilyIndices.gfxIndex = i;
-            continue;
-         }
-
-         if (not queueFamilyIndices.computeIndex.has_value() && Utils::deviceQueueHasCapabilities(properties, VK_QUEUE_COMPUTE_BIT))
-            queueFamilyIndices.computeIndex = i;
-
-         if (not queueFamilyIndices.transferIndex.has_value() && Utils::deviceQueueHasCapabilities(properties, VK_QUEUE_TRANSFER_BIT))
-            queueFamilyIndices.transferIndex = i;
-
-         if (not queueFamilyIndices.sparseBindingIndex.has_value() && Utils::deviceQueueHasCapabilities(properties, VK_QUEUE_SPARSE_BINDING_BIT))
-            queueFamilyIndices.sparseBindingIndex = i;
-
-         if (not queueFamilyIndices.opticalFlowIndex.has_value() && Utils::deviceQueueHasCapabilities(properties, VK_QUEUE_OPTICAL_FLOW_BIT_NV))
-            queueFamilyIndices.opticalFlowIndex = i;
-      }
-
-      m_device = std::make_unique<Device>(selectedDevice, std::move(queueFamilyIndices));
-   }
+   
+   m_device = std::make_unique<Device>(selectedDevice);
 }
 
 const std::string& VulkanRenderer::getAppName()

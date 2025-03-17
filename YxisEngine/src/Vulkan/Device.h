@@ -6,20 +6,27 @@
 
 namespace Yxis::Vulkan
 {
-   struct QueueFamilyIndices
+   struct Queue
    {
-      uint32_t                gfxIndex;
-      std::optional<uint32_t> computeIndex;
-      std::optional<uint32_t> transferIndex;
-      std::optional<uint32_t> sparseBindingIndex;
-      std::optional<uint32_t> opticalFlowIndex;
+      uint32_t             familyIndex;
+      std::vector<VkQueue> queues;
+   };
+
+   struct Queues
+   {
+      Queue graphics;
+      std::optional<Queue> compute;
+      std::optional<Queue> transfer;
+      std::optional<Queue> sparseBinding;
+      std::optional<Queue> videoDecode;
+      std::optional<Queue> videoEncode;
+      std::optional<Queue> nvOpticalFlow;
    };
 
    class Device
    {
    public:
-      enum class QueueType { GRAPHICS, COMPUTE, TRANSFER, SPARSE_BINDING, OPTICAL_FLOW, VIDEO_DECODE, VIDEO_ENCODE };
-      Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndices);
+      Device(VkPhysicalDevice physicalDevice);
       ~Device();
 
       operator VkDevice() const;
@@ -35,54 +42,22 @@ namespace Yxis::Vulkan
       const std::vector<VkPresentModeKHR> getPresentModes() const;
 
       // queues
-      const QueueFamilyIndices& getQueueFamilyIndices() const;
-      const VkQueue getQueue(QueueType type) const;
-      const VkCommandPool getCommandPoolForQueueType(QueueType type) const;
-
-      template <uint32_t count>
-      const std::array<VkCommandBuffer, count> allocateCommandBuffers(QueueType queueType, const VkCommandBufferLevel level) const
-      {
-         VkCommandPool commandPool = getCommandPoolForQueueType(queueType);
-         assert(commandPool != VK_NULL_HANDLE && "commandPool is null");
-         std::array<VkCommandBuffer, count> commandBuffers;
-         const VkCommandBufferAllocateInfo allocateInfo =
-         {
-            .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-            .pNext = nullptr,
-            .commandPool = commandPool,
-            .level = level,
-            .commandBufferCount = count
-         };
-
-         VkResult result = vkAllocateCommandBuffers(m_device, &allocateInfo, commandBuffers.data());
-         if (result != VK_SUCCESS)
-            throw std::runtime_error(fmt::format("Failed to create {} command buffers. {}", count, string_VkResult(result)));
-
-         return commandBuffers;
-      }
-
-      void freeCommandBuffers(Device::QueueType type, const std::span<VkCommandBuffer> commandBuffers) const;
+      const Queues& getDeviceQueues() const;
 
       // synchronization
       const TimelineSemaphore createTimelineSemaphore() const;
+
+      // memory
+      // const VkBuffer createBuffer() const;
    private:
       VkDevice m_device;
       VkPhysicalDevice m_physicalDevice;
 
       struct {
-         VkCommandPool gfxCommandPool;
-         VkCommandPool computeCommandPool;
-         VkCommandPool transferCommandPool;
-      } m_commandPools;
+         VmaAllocator allocator;
+      } m_memory;
 
       std::unique_ptr<Swapchain> m_swapchain;
-
-      struct {
-         VkQueue graphicsQueue = VK_NULL_HANDLE;
-         VkQueue computeQueue = VK_NULL_HANDLE;
-         VkQueue transferQueue = VK_NULL_HANDLE;
-      } m_queues;
-
-      QueueFamilyIndices m_queueFamilies;
+      Queues m_queues;
    };
 }

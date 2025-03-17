@@ -1,23 +1,13 @@
 #include "Device.h"
 #include <Yxis/Logger.h>
 #include "../Window.h"
-#include "VulkanUtilities.h"
 
 using namespace Yxis::Vulkan;
+using QueueFlags = std::bitset<32>;
 
-Device::Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndices)
-   : m_physicalDevice(physicalDevice), m_queueFamilies(std::move(queueIndices))
+Device::Device(VkPhysicalDevice physicalDevice)
+   : m_physicalDevice(physicalDevice)
 {
-   constexpr float queuePriority = 1.0f; // TODO: make queue priority matter
-   std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-   queueCreateInfos.emplace_back(VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO, nullptr, 0, m_queueFamilies.gfxIndex, 1, &queuePriority);
-
-   if (m_queueFamilies.computeIndex.has_value())
-      queueCreateInfos.emplace_back(VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO, nullptr, 0, m_queueFamilies.computeIndex.value(), 1, &queuePriority);
-   
-   if (m_queueFamilies.transferIndex.has_value())
-      queueCreateInfos.emplace_back(VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO, nullptr, 0, m_queueFamilies.transferIndex.value(), 1, &queuePriority);
-
    constexpr std::array<const char*, 0> deviceEnabledLayers = {};
    constexpr const char* deviceEnabledExtensions[] = { 
       VK_KHR_SWAPCHAIN_EXTENSION_NAME,
@@ -27,72 +17,136 @@ Device::Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndice
 #endif
    };
 
-   
-   VkPhysicalDeviceFeatures2 features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2 };
-
-   // link structures (vk14 -> vk13 -> vk12 -> vk11)
-   VkPhysicalDeviceVulkan11Features vulkan11Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
-   VkPhysicalDeviceVulkan12Features vulkan12Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, &vulkan11Features };
-   VkPhysicalDeviceVulkan13Features vulkan13Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES, &vulkan12Features };
-   VkPhysicalDeviceVulkan14Features vulkan14Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES, &vulkan13Features };
-   features.pNext = &vulkan14Features;
-
-   vkGetPhysicalDeviceFeatures2(physicalDevice, &features);
-
-   VkDeviceCreateInfo deviceCreateInfo =
+   // queues
    {
-      .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-      .pNext = &features,
-      .flags = 0,
-      .queueCreateInfoCount = static_cast<uint32_t>(queueCreateInfos.size()),
-      .pQueueCreateInfos = queueCreateInfos.data(),
-      .enabledLayerCount = static_cast<uint32_t>(deviceEnabledLayers.size()),
-      .ppEnabledLayerNames = deviceEnabledLayers.data(),
-      .enabledExtensionCount = static_cast<uint32_t>(std::size(deviceEnabledExtensions)),
-      .ppEnabledExtensionNames = deviceEnabledExtensions,
+      // fill m_queueFamilies
+      uint32_t queueCount;
+      vkGetPhysicalDeviceQueueFamilyProperties2(m_physicalDevice, &queueCount, nullptr);
+      std::vector<VkQueueFamilyProperties2> queueFamilies(queueCount, VkQueueFamilyProperties2{ VK_STRUCTURE_TYPE_QUEUE_FAMILY_PROPERTIES_2 });
+      vkGetPhysicalDeviceQueueFamilyProperties2(m_physicalDevice, &queueCount, queueFamilies.data());
+
+      auto testQueueFlags = [](const VkQueueFlags flags, const uint32_t bits) { return (flags & bits) == bits; };
+      for (uint32_t i = 0; i < queueFamilies.size(); i++)
+      {
+         // TODO: Video encode, Video decode, possibly sparse resources if ever needed
+         const VkQueueFamilyProperties& properties = queueFamilies[i].queueFamilyProperties;
+         if (properties.queueCount > 0)
+         {
+            if (testQueueFlags(properties.queueFlags, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT)) // graphics doesn't need to advertise VK_QUEUE_TRANSFER_BIT (link below)
+            {
+               m_queues.graphics.familyIndex = i;
+               m_queues.graphics.queues.resize(1); // at least 1
+            }
+
+            // check if this is dedicated compute family
+            if (not m_queues.compute.has_value()
+               && testQueueFlags(properties.queueFlags, VK_QUEUE_COMPUTE_BIT)
+               && not testQueueFlags(properties.queueFlags, VK_QUEUE_GRAPHICS_BIT)
+               )
+               m_queues.compute = Queue{ .familyIndex = i };
+
+            // dedicated transfer queue
+            if (not m_queues.transfer.has_value()
+               && testQueueFlags(properties.queueFlags, VK_QUEUE_TRANSFER_BIT)
+               && not testQueueFlags(properties.queueFlags, VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT)
+            )
+               m_queues.transfer = Queue{ .familyIndex = i };
+
+            // optical flow queue (maybe for later use)
+            if (not m_queues.nvOpticalFlow.has_value()
+               && testQueueFlags(properties.queueFlags, VK_QUEUE_OPTICAL_FLOW_BIT_NV)
+               && not testQueueFlags(properties.queueFlags, VK_QUEUE_COMPUTE_BIT | VK_QUEUE_GRAPHICS_BIT)
+            )
+               m_queues.nvOpticalFlow = Queue{ .familyIndex = i };
+         }
+      }
+   }
+   
+   {
+      static constexpr float QUEUE_PRIORITY = 1.0f;
+      // https://community.khronos.org/t/question-about-queue-families/108131/2
+      // there's always one multi-purpose, and it's going to be the gfx queue
+      std::vector<VkDeviceQueueCreateInfo> queuesCreateInfos(1, VkDeviceQueueCreateInfo{ VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO, nullptr, 0, m_queues.graphics.familyIndex, 1, &QUEUE_PRIORITY });
+      auto enableDedicatedQueue = [&](std::optional<Queue>& optionalQueue, uint32_t howMany) {
+         if (optionalQueue.has_value())
+         {
+            queuesCreateInfos.emplace_back(VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO, nullptr, 0, optionalQueue.value().familyIndex, howMany, &QUEUE_PRIORITY);
+            optionalQueue.value().queues.resize(howMany);
+            return;
+         }
+
+         queuesCreateInfos[0].queueCount++;
+      };
+
+      enableDedicatedQueue(m_queues.compute, 1);
+      enableDedicatedQueue(m_queues.transfer, 1);
+
+      // optical flow queue is a special case and has to be handled manually (it may exist but it's not necessary)
+      // only one enabled for now
+      if (m_queues.nvOpticalFlow.has_value())
+      {
+         queuesCreateInfos.emplace_back(VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO, nullptr, 0, m_queues.nvOpticalFlow.value().familyIndex, 1, &QUEUE_PRIORITY);
+         m_queues.nvOpticalFlow.value().queues.resize(1);
+      }
+
+      VkPhysicalDeviceProperties2 properties{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2, nullptr };
+      vkGetPhysicalDeviceProperties2(m_physicalDevice, &properties);
+
+      // linking order (vk14 -> vk13 -> vk12 -> vk11)
+      VkPhysicalDeviceVulkan11Features vulkan11Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES };
+      VkPhysicalDeviceVulkan12Features vulkan12Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, &vulkan11Features };
+      VkPhysicalDeviceVulkan13Features vulkan13Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES, &vulkan12Features };
+      VkPhysicalDeviceVulkan14Features vulkan14Features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES, &vulkan13Features };
+      VkPhysicalDeviceFeatures2 features{ VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2, &vulkan14Features };
+      vkGetPhysicalDeviceFeatures2(m_physicalDevice, &features);
+
+      VkDeviceCreateInfo deviceCreateInfo =
+      {
+         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+         .pNext = &features,
+         .flags = 0,
+         .queueCreateInfoCount = static_cast<uint32_t>(queuesCreateInfos.size()),
+         .pQueueCreateInfos = queuesCreateInfos.data(),
+         .enabledLayerCount = static_cast<uint32_t>(deviceEnabledLayers.size()),
+         .ppEnabledLayerNames = deviceEnabledLayers.data(),
+         .enabledExtensionCount = static_cast<uint32_t>(std::size(deviceEnabledExtensions)),
+         .ppEnabledExtensionNames = deviceEnabledExtensions,
+      };
+
+      VkResult result = vkCreateDevice(m_physicalDevice, &deviceCreateInfo, nullptr, &m_device);
+      if (result != VK_SUCCESS)
+      {
+         throw std::runtime_error(fmt::format("Failed to create logical device. {}", string_VkResult(result)));
+      }
+
+      volkLoadDevice(m_device);
+   }
+
+   VkDeviceQueueInfo2 queueInfo{ .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_INFO_2, .queueFamilyIndex = m_queues.graphics.familyIndex };
+   auto getOptionalQueues = [&](std::optional<Queue>& optionalQueue) {
+      if (optionalQueue.has_value())
+      {
+         Queue& value = optionalQueue.value();
+         queueInfo.queueFamilyIndex = value.familyIndex;
+
+         for (size_t i = 0; i < value.queues.size(); i++)
+         {
+            queueInfo.queueIndex = i;
+            vkGetDeviceQueue2(m_device, &queueInfo, &value.queues[i]);
+         }
+      }
    };
 
-   VkResult result = vkCreateDevice(m_physicalDevice, &deviceCreateInfo, nullptr, &m_device);
-   if (result != VK_SUCCESS)
+   // gfx goes first
+   for (size_t i = 0; i < m_queues.graphics.queues.size(); i++)
    {
-      throw std::runtime_error(fmt::format("Failed to create logical device. {}", string_VkResult(result)));
+      queueInfo.queueIndex = static_cast<uint32_t>(i);
+      vkGetDeviceQueue2(m_device, &queueInfo, &m_queues.graphics.queues[i]);
    }
 
-   volkLoadDevice(m_device);
-
-   VkDeviceQueueInfo2 queueInfo{ VK_STRUCTURE_TYPE_DEVICE_QUEUE_INFO_2, nullptr, 0, m_queueFamilies.gfxIndex, 0 }; // graphics goes first
-
-   vkGetDeviceQueue2(m_device, &queueInfo, &m_queues.graphicsQueue);
-   if (m_queueFamilies.computeIndex.has_value())
-   {
-      assert(m_queues.computeQueue == VK_NULL_HANDLE && "The field of compute queue has been initialized already!");
-      queueInfo.queueFamilyIndex = m_queueFamilies.computeIndex.value();
-      vkGetDeviceQueue2(m_device, &queueInfo, &m_queues.computeQueue);
-   }
-
-   if (m_queueFamilies.transferIndex.has_value())
-   {
-      assert(m_queues.transferQueue == VK_NULL_HANDLE && "The field of transfer queue has been initialized already!");
-      queueInfo.queueFamilyIndex = m_queueFamilies.transferIndex.value();
-      vkGetDeviceQueue2(m_device, &queueInfo, &m_queues.transferQueue);
-   }
-
-   {
-      VkCommandPoolCreateInfo commandPoolCreateInfo{ VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO, nullptr, VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT, m_queueFamilies.gfxIndex };
-      result = vkCreateCommandPool(m_device, &commandPoolCreateInfo, nullptr, &m_commandPools.gfxCommandPool);
-      if (result != VK_SUCCESS)
-         throw std::runtime_error(fmt::format("Failed to create a graphics command pool. {}", string_VkResult(result)));
-
-      commandPoolCreateInfo.queueFamilyIndex = m_queueFamilies.computeIndex.value();
-      result = vkCreateCommandPool(m_device, &commandPoolCreateInfo, nullptr, &m_commandPools.computeCommandPool);
-      if (result != VK_SUCCESS)
-         throw std::runtime_error(fmt::format("Failed to create a compute command pool. {}", string_VkResult(result)));
-
-      commandPoolCreateInfo.queueFamilyIndex = m_queueFamilies.transferIndex.value();
-      result = vkCreateCommandPool(m_device, &commandPoolCreateInfo, nullptr, &m_commandPools.transferCommandPool);
-      if (result != VK_SUCCESS)
-         throw std::runtime_error(fmt::format("Failed to create a transfer command pool. {}", string_VkResult(result)));
-   }
+   getOptionalQueues(m_queues.compute);
+   getOptionalQueues(m_queues.transfer);
+   getOptionalQueues(m_queues.nvOpticalFlow);
 
    m_swapchain = std::make_unique<Swapchain>(this);
 }
@@ -172,54 +226,9 @@ const std::vector<VkPresentModeKHR> Device::getPresentModes() const
    return presentModes;
 }
 
-const QueueFamilyIndices& Device::getQueueFamilyIndices() const
+const Queues& Device::getDeviceQueues() const
 {
-   return m_queueFamilies;
-}
-
-const VkQueue Device::getQueue(Device::QueueType type) const
-{
-   switch (type)
-   {
-   case QueueType::GRAPHICS:
-      return m_queues.graphicsQueue;
-      break;
-   case QueueType::COMPUTE:
-      return m_queues.computeQueue;
-      break;
-   case QueueType::TRANSFER:
-      return m_queues.transferQueue;
-      break;
-   default:
-      YX_CORE_LOGGER->warn("Requested queue type is not supported yet");
-      break;
-   }
-
-   return VK_NULL_HANDLE;
-}
-
-const VkCommandPool Device::getCommandPoolForQueueType(Device::QueueType type) const
-{
-   switch (type)
-   {
-   case QueueType::GRAPHICS:
-      return m_commandPools.gfxCommandPool;
-      break;
-   case QueueType::COMPUTE:
-      return m_commandPools.computeCommandPool;
-      break;
-   case QueueType::TRANSFER:
-      return m_commandPools.transferCommandPool;
-      break;
-   default:
-      return VK_NULL_HANDLE;
-      break;
-   }
-}
-
-void Device::freeCommandBuffers(Device::QueueType type, const std::span<VkCommandBuffer> commandBuffers) const
-{
-   vkFreeCommandBuffers(m_device, getCommandPoolForQueueType(type), static_cast<uint32_t>(commandBuffers.size()), commandBuffers.data());
+   return m_queues;
 }
 
 const TimelineSemaphore Device::createTimelineSemaphore() const
@@ -230,9 +239,6 @@ const TimelineSemaphore Device::createTimelineSemaphore() const
 Device::~Device()
 {
    m_swapchain.reset();
-   vkDestroyCommandPool(m_device, m_commandPools.gfxCommandPool, nullptr);
-   vkDestroyCommandPool(m_device, m_commandPools.computeCommandPool, nullptr);
-   vkDestroyCommandPool(m_device, m_commandPools.transferCommandPool, nullptr);
    if (m_device != VK_NULL_HANDLE)
       vkDestroyDevice(m_device, nullptr);
 }

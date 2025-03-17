@@ -36,7 +36,7 @@ Swapchain::Swapchain(const Device* device)
    }
 
    {
-      const auto gfxQueueIndex = m_device->getQueueFamilyIndices().gfxIndex;
+      const auto gfxQueueIndex = m_device->getDeviceQueues().graphics.familyIndex;
       VkSwapchainCreateInfoKHR createInfo =
       {
          .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
