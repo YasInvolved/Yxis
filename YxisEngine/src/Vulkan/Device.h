@@ -2,7 +2,6 @@
 
 #include "../internal_pch.h"
 #include "Swapchain.h"
-#include "DeviceMemoryManager.h"
 #include "TimelineSemaphore.h"
 
 namespace Yxis::Vulkan
@@ -66,9 +65,6 @@ namespace Yxis::Vulkan
 
       // synchronization
       const TimelineSemaphore createTimelineSemaphore() const;
-      
-      // memory manager
-      std::unique_ptr<DeviceMemoryManager> memoryManager;
    private:
       VkDevice m_device;
       VkPhysicalDevice m_physicalDevice;

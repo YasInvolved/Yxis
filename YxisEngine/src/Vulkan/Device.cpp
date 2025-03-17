@@ -95,7 +95,6 @@ Device::Device(VkPhysicalDevice physicalDevice, QueueFamilyIndices&& queueIndice
    }
 
    m_swapchain = std::make_unique<Swapchain>(this);
-   memoryManager = std::make_unique<DeviceMemoryManager>(this);
 }
 
 Device::operator VkDevice() const
@@ -230,7 +229,6 @@ const TimelineSemaphore Device::createTimelineSemaphore() const
 
 Device::~Device()
 {
-   memoryManager.reset();
    m_swapchain.reset();
    vkDestroyCommandPool(m_device, m_commandPools.gfxCommandPool, nullptr);
    vkDestroyCommandPool(m_device, m_commandPools.computeCommandPool, nullptr);
