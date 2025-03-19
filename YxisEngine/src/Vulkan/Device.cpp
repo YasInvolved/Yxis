@@ -1,9 +1,23 @@
 #include "Device.h"
 #include <Yxis/Logger.h>
 #include "../Window.h"
+#include "VulkanRenderer.h"
+
+#define VMA_IMPLEMENTATION
+#define VMA_VULKAN_VERSION 1004000
+#define VMA_STATIC_VULKAN_FUNCTIONS 0
+#define VMA_DYNAMIC_VULKAN_FUNCTIONS 1
+#include <vk_mem_alloc.h>
 
 using namespace Yxis::Vulkan;
 using QueueFlags = std::bitset<32>;
+
+static constexpr VmaAllocatorCreateFlags allcatorEnabledExtensions =
+   VMA_ALLOCATOR_CREATE_KHR_DEDICATED_ALLOCATION_BIT |
+   VMA_ALLOCATOR_CREATE_KHR_MAINTENANCE4_BIT |
+   VMA_ALLOCATOR_CREATE_KHR_MAINTENANCE5_BIT |
+   VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT |
+   VMA_ALLOCATOR_CREATE_EXT_MEMORY_PRIORITY_BIT;
 
 Device::Device(VkPhysicalDevice physicalDevice)
    : m_physicalDevice(physicalDevice)
@@ -12,9 +26,10 @@ Device::Device(VkPhysicalDevice physicalDevice)
    constexpr const char* deviceEnabledExtensions[] = { 
       VK_KHR_SWAPCHAIN_EXTENSION_NAME,
       VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME,
-#ifdef YX_DEBUG
-      VK_EXT_DEBUG_MARKER_EXTENSION_NAME
-#endif
+      VK_EXT_PAGEABLE_DEVICE_LOCAL_MEMORY_EXTENSION_NAME,
+      VK_KHR_GET_MEMORY_REQUIREMENTS_2_EXTENSION_NAME,
+      VK_EXT_MEMORY_BUDGET_EXTENSION_NAME,
+      VK_EXT_MEMORY_PRIORITY_EXTENSION_NAME,
    };
 
    // queues
@@ -122,31 +137,55 @@ Device::Device(VkPhysicalDevice physicalDevice)
       volkLoadDevice(m_device);
    }
 
-   VkDeviceQueueInfo2 queueInfo{ .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_INFO_2, .queueFamilyIndex = m_queues.graphics.familyIndex };
-   auto getOptionalQueues = [&](std::optional<Queue>& optionalQueue) {
-      if (optionalQueue.has_value())
-      {
-         Queue& value = optionalQueue.value();
-         queueInfo.queueFamilyIndex = value.familyIndex;
-
-         for (size_t i = 0; i < value.queues.size(); i++)
-         {
-            queueInfo.queueIndex = i;
-            vkGetDeviceQueue2(m_device, &queueInfo, &value.queues[i]);
-         }
-      }
-   };
-
-   // gfx goes first
-   for (size_t i = 0; i < m_queues.graphics.queues.size(); i++)
    {
-      queueInfo.queueIndex = static_cast<uint32_t>(i);
-      vkGetDeviceQueue2(m_device, &queueInfo, &m_queues.graphics.queues[i]);
+      VkDeviceQueueInfo2 queueInfo{ .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_INFO_2, .queueFamilyIndex = m_queues.graphics.familyIndex };
+      auto getOptionalQueues = [&](std::optional<Queue>& optionalQueue) {
+         if (optionalQueue.has_value())
+         {
+            Queue& value = optionalQueue.value();
+            queueInfo.queueFamilyIndex = value.familyIndex;
+
+            for (size_t i = 0; i < value.queues.size(); i++)
+            {
+               queueInfo.queueIndex = i;
+               vkGetDeviceQueue2(m_device, &queueInfo, &value.queues[i]);
+            }
+         }
+         };
+
+      // gfx goes first
+      for (size_t i = 0; i < m_queues.graphics.queues.size(); i++)
+      {
+         queueInfo.queueIndex = static_cast<uint32_t>(i);
+         vkGetDeviceQueue2(m_device, &queueInfo, &m_queues.graphics.queues[i]);
+      }
+
+      getOptionalQueues(m_queues.compute);
+      getOptionalQueues(m_queues.transfer);
+      getOptionalQueues(m_queues.nvOpticalFlow);
    }
 
-   getOptionalQueues(m_queues.compute);
-   getOptionalQueues(m_queues.transfer);
-   getOptionalQueues(m_queues.nvOpticalFlow);
+   {
+      const VmaVulkanFunctions vulkanFunctions =
+      {
+         .vkGetInstanceProcAddr = vkGetInstanceProcAddr,
+         .vkGetDeviceProcAddr = vkGetDeviceProcAddr
+      };
+
+      const VmaAllocatorCreateInfo allocatorCreateInfo =
+      {
+         .flags = allcatorEnabledExtensions,
+         .physicalDevice = m_physicalDevice,
+         .device = m_device,
+         .pVulkanFunctions = &vulkanFunctions,
+         .instance = VulkanRenderer::getInstance(),
+         .vulkanApiVersion = VK_API_VERSION_1_4,
+      };
+
+      VkResult result = vmaCreateAllocator(&allocatorCreateInfo, &m_memoryManager.allocator);
+      if (result != VK_SUCCESS)
+         throw std::runtime_error(fmt::format("Failed to create memory allocator. {}", string_VkResult(result)));
+   }
 
    m_swapchain = std::make_unique<Swapchain>(this);
 }
@@ -234,6 +273,11 @@ const Queues& Device::getDeviceQueues() const
 const TimelineSemaphore Device::createTimelineSemaphore() const
 {
    return TimelineSemaphore(this, 0);
+}
+
+const VmaAllocator Device::getAllocator() const
+{
+   return m_memoryManager.allocator;
 }
 
 Device::~Device()

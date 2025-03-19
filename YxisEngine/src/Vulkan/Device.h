@@ -3,6 +3,7 @@
 #include "../internal_pch.h"
 #include "Swapchain.h"
 #include "TimelineSemaphore.h"
+#include "vk_mem_alloc.h"
 
 namespace Yxis::Vulkan
 {
@@ -14,7 +15,7 @@ namespace Yxis::Vulkan
 
    struct Queues
    {
-      Queue graphics;
+      Queue                graphics;
       std::optional<Queue> compute;
       std::optional<Queue> transfer;
       std::optional<Queue> sparseBinding;
@@ -48,14 +49,15 @@ namespace Yxis::Vulkan
       const TimelineSemaphore createTimelineSemaphore() const;
 
       // memory
-      // const VkBuffer createBuffer() const;
+      const VmaAllocator getAllocator() const;
+
    private:
       VkDevice m_device;
       VkPhysicalDevice m_physicalDevice;
 
       struct {
          VmaAllocator allocator;
-      } m_memory;
+      } m_memoryManager;
 
       std::unique_ptr<Swapchain> m_swapchain;
       Queues m_queues;
