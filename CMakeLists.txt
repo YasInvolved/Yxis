@@ -31,5 +31,11 @@ add_subdirectory(3rdparty/SPIRV-Tools)
 add_subdirectory(3rdparty/glslang)
 add_subdirectory(3rdparty/VulkanMemoryAllocator)
 
+set(SHADERC_ENABLE_EXAMPLES ON)
+set(SHADERC_SKIP_TESTS ON)
+add_subdirectory(3rdparty/shaderc)
+
+include(cmake/utils.cmake)
+
 add_subdirectory(YxisEngine)
 add_subdirectory(YxisSandbox)
